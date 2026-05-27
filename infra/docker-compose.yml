@@ -1,0 +1,78 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: lipiocr-api
+    environment:
+      LIPIOCR_ENVIRONMENT: ${LIPIOCR_ENVIRONMENT:-production}
+      LIPIOCR_CORS_ORIGINS: ${LIPIOCR_CORS_ORIGINS:-http://localhost:3020}
+      LIPIOCR_UPLOAD_DIR: /app/storage/uploads
+      LIPIOCR_GEMMA_ENABLED: ${LIPIOCR_GEMMA_ENABLED:-true}
+      LIPIOCR_GEMMA_API_BASE: ${LIPIOCR_GEMMA_API_BASE:-http://host.docker.internal:8003/v1}
+      LIPIOCR_GEMMA_MODEL: ${LIPIOCR_GEMMA_MODEL:-gemma-4-26b-4bit}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lipiocr}:${POSTGRES_PASSWORD:-change-me-before-production}@postgres:5432/${POSTGRES_DB:-lipiocr}
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8020:8000"
+    volumes:
+      - ../storage/uploads:/app/storage/uploads
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8020}
+    container_name: lipiocr-frontend
+    ports:
+      - "3020:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: lipiocr-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lipiocr}
+      POSTGRES_USER: ${POSTGRES_USER:-lipiocr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-before-production}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: lipiocr-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: lipiocr-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lipiocr}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-before-production}
+    ports:
+      - "9100:9000"
+      - "9101:9001"
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
