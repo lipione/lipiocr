@@ -336,6 +336,131 @@ type ExportProfileResponse = {
   payload: unknown;
 };
 
+type ReviewAssignment = {
+  reviewer: string;
+  queue: string;
+  priority: string;
+  assigned_at?: string;
+};
+
+type ReviewWorkbench = {
+  case_id: string;
+  assignment: ReviewAssignment;
+  comments: {
+    comment_id: string;
+    author: string;
+    message: string;
+    field_key?: string | null;
+    visibility: string;
+    created_at: string;
+  }[];
+  rework_requests: {
+    request_id: string;
+    requester: string;
+    reason: string;
+    fields: string[];
+    status: string;
+    created_at: string;
+  }[];
+  field_corrections: Record<string, unknown>[];
+  approval_history: {
+    action: string;
+    actor: string;
+    note: string;
+    created_at: string;
+  }[];
+  evidence_crops: {
+    field_key: string;
+    document_id?: string | null;
+    source_page: number;
+    bbox?: number[] | null;
+    evidence_text: string;
+    crop_uri: string;
+  }[];
+  editable_fields: ExtractedField[];
+};
+
+type AssignmentResponse = {
+  case_id: string;
+  assignment: ReviewAssignment;
+  case?: KycCase;
+};
+
+type CommentResponse = {
+  case_id: string;
+  comment: ReviewWorkbench["comments"][number];
+};
+
+type CorrectionResponse = {
+  correction: Record<string, unknown>;
+  case?: KycCase;
+};
+
+type IntegrationOperations = {
+  webhooks: {
+    key: string;
+    url: string;
+    events: string[];
+    status: string;
+    created_at?: string;
+  }[];
+  retry_queue: {
+    event_id: string;
+    mode: string;
+    profile_key?: string;
+    target?: string;
+    case_ids?: string[];
+    status: string;
+    attempts: number;
+    last_error?: string;
+  }[];
+  dead_letters: Record<string, unknown>[];
+  sftp: {
+    status: string;
+    pending_batches: number;
+  };
+};
+
+type VerificationAdapter = {
+  key: string;
+  label: string;
+  status: string;
+  mode: string;
+  endpoint?: string;
+  updated_at?: string;
+};
+
+type VerificationAdaptersResponse = {
+  adapters: VerificationAdapter[];
+};
+
+type VerificationAdapterRunResponse = {
+  case_id: string;
+  adapter: VerificationAdapter;
+  check: VerificationCheck;
+  case?: KycCase;
+};
+
+type AccuracyAnalytics = {
+  correction_count: number;
+  field_accuracy: Record<
+    string,
+    {
+      corrections: number;
+      observed: number;
+      average_confidence: number;
+      estimated_accuracy: number;
+    }
+  >;
+  document_type_performance: Record<string, { corrections: number; status: string }>;
+  confidence_drift: {
+    field_key: string;
+    average_confidence: number;
+    corrections: number;
+  }[];
+  recent_corrections: Record<string, unknown>[];
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
 
 const caseTypes: { value: CaseType; label: string }[] = [
@@ -513,6 +638,21 @@ export default function Home() {
   const [profileExport, setProfileExport] = useState<ResourceState<ExportProfileResponse>>(() =>
     emptyResource<ExportProfileResponse>(),
   );
+  const [reviewWorkbench, setReviewWorkbench] = useState<ResourceState<ReviewWorkbench>>(() =>
+    emptyResource<ReviewWorkbench>(),
+  );
+  const [integrationOps, setIntegrationOps] = useState<ResourceState<IntegrationOperations>>(() =>
+    emptyResource<IntegrationOperations>(),
+  );
+  const [verificationAdapters, setVerificationAdapters] = useState<ResourceState<VerificationAdaptersResponse>>(() =>
+    emptyResource<VerificationAdaptersResponse>(),
+  );
+  const [adapterRun, setAdapterRun] = useState<ResourceState<VerificationAdapterRunResponse>>(() =>
+    emptyResource<VerificationAdapterRunResponse>(),
+  );
+  const [accuracy, setAccuracy] = useState<ResourceState<AccuracyAnalytics>>(() =>
+    emptyResource<AccuracyAnalytics>(),
+  );
 
   const selectedCase = useMemo(
     () => cases.find((item) => item.id === selectedId) ?? cases[0] ?? null,
@@ -528,6 +668,12 @@ export default function Home() {
   const readinessScore = intelligence.data?.readiness_score ?? 0;
   const validationFindings = validation.data?.findings ?? selectedCase?.validation_findings ?? [];
   const packetResults = [...packetDocuments(splitPreview.data), ...packetDocuments(classification.data)].slice(0, 6);
+  const reviewField =
+    selectedCase?.extracted_fields.find((field) => field.key.includes("citizenship")) ??
+    selectedCase?.extracted_fields[0] ??
+    null;
+  const accuracyRows = Object.entries(accuracy.data?.field_accuracy ?? {}).slice(0, 5);
+  const retryEvent = integrationOps.data?.retry_queue[0] ?? null;
 
   const summaryCounts = operations.data?.counts ?? {
     total_cases: cases.length,
@@ -565,6 +711,9 @@ export default function Home() {
     setTemplateStudio((current) => loadingResource(current));
     setProfiles((current) => loadingResource(current));
     setAiHealth((current) => loadingResource(current));
+    setIntegrationOps((current) => loadingResource(current));
+    setVerificationAdapters((current) => loadingResource(current));
+    setAccuracy((current) => loadingResource(current));
 
     await Promise.allSettled([
       apiJson<PlatformStatus>("/api/platform/status", { cache: "no-store" })
@@ -587,6 +736,19 @@ export default function Home() {
       apiJson<AiHealth>("/api/ai/health", { cache: "no-store" })
         .then((data) => setAiHealth(readyResource(data)))
         .catch((error) => setAiHealth((current) => failedResource(current, error, "AI health unavailable"))),
+      apiJson<IntegrationOperations>("/api/integrations/operations", { cache: "no-store" })
+        .then((data) => setIntegrationOps(readyResource(data)))
+        .catch((error) =>
+          setIntegrationOps((current) => failedResource(current, error, "Integration operations unavailable")),
+        ),
+      apiJson<VerificationAdaptersResponse>("/api/verification/adapters", { cache: "no-store" })
+        .then((data) => setVerificationAdapters(readyResource(data)))
+        .catch((error) =>
+          setVerificationAdapters((current) => failedResource(current, error, "Verification adapters unavailable")),
+        ),
+      apiJson<AccuracyAnalytics>("/api/analytics/accuracy", { cache: "no-store" })
+        .then((data) => setAccuracy(readyResource(data)))
+        .catch((error) => setAccuracy((current) => failedResource(current, error, "Accuracy analytics unavailable"))),
     ]);
   }, []);
 
@@ -616,6 +778,16 @@ export default function Home() {
     }
   }, []);
 
+  const loadReviewWorkbench = useCallback(async (caseId: string) => {
+    setReviewWorkbench((current) => loadingResource(current));
+    try {
+      const data = await apiJson<ReviewWorkbench>(`/api/review/workbench/${caseId}`, { cache: "no-store" });
+      setReviewWorkbench(readyResource(data));
+    } catch (error) {
+      setReviewWorkbench((current) => failedResource(current, error, "Review workbench unavailable"));
+    }
+  }, []);
+
   useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
@@ -623,6 +795,7 @@ export default function Home() {
   useEffect(() => {
     if (!selectedCaseId) {
       setIntelligence(emptyResource<CaseIntelligence>());
+      setReviewWorkbench(emptyResource<ReviewWorkbench>());
       return;
     }
     setSplitPreview(emptyResource<SplitPreviewResponse>());
@@ -632,8 +805,10 @@ export default function Home() {
     setWebhook(emptyResource<WebhookTestResponse>());
     setReviewLink(emptyResource<EmbeddedReviewLinkResponse>());
     setProfileExport(emptyResource<ExportProfileResponse>());
+    setAdapterRun(emptyResource<VerificationAdapterRunResponse>());
     void loadCaseIntelligence(selectedCaseId);
-  }, [loadCaseIntelligence, selectedCaseId]);
+    void loadReviewWorkbench(selectedCaseId);
+  }, [loadCaseIntelligence, loadReviewWorkbench, selectedCaseId]);
 
   useEffect(() => {
     if (!exportProfiles.includes(profileKey)) {
@@ -865,6 +1040,286 @@ export default function Home() {
     } catch (error) {
       setReviewLink((current) => failedResource(current, error, "Review link failed"));
       setMessage(error instanceof Error ? error.message : "Review link failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function assignReviewer() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("assign-reviewer");
+    setMessage("Assigning reviewer");
+    setReviewWorkbench((current) => loadingResource(current));
+    try {
+      const data = await apiJson<AssignmentResponse>(`/api/cases/${selectedCase.id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewer: "checker.two", queue: "high_value_kyc", priority: "high" }),
+      });
+      mergeCaseFromPayload(data);
+      setMessage("Reviewer assigned");
+      void loadReviewWorkbench(selectedCase.id);
+      void loadEnterpriseContext();
+    } catch (error) {
+      setReviewWorkbench((current) => failedResource(current, error, "Reviewer assignment failed"));
+      setMessage(error instanceof Error ? error.message : "Reviewer assignment failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function addReviewComment() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("review-comment");
+    setMessage("Adding review note");
+    try {
+      await apiJson<CommentResponse>(`/api/cases/${selectedCase.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          author: "checker.two",
+          message: "Evidence crop and registry result need checker confirmation.",
+          field_key: reviewField?.key ?? "case",
+        }),
+      });
+      setMessage("Review note added");
+      void loadReviewWorkbench(selectedCase.id);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Review note failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function requestRework() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("request-rework");
+    setMessage("Requesting maker rework");
+    try {
+      const updated = await apiJson<KycCase>(`/api/cases/${selectedCase.id}/rework`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requester: "checker.two",
+          reason: "Source evidence must be refreshed before final approval.",
+          fields: reviewField ? [reviewField.key] : [],
+        }),
+      });
+      mergeCase(updated);
+      setMessage("Rework requested");
+      void loadReviewWorkbench(updated.id);
+      void loadEnterpriseContext();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Rework request failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function recordCorrection() {
+    if (!selectedCase || !reviewField) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("record-correction");
+    setMessage("Recording correction");
+    setAccuracy((current) => loadingResource(current));
+    try {
+      const correctedValue = reviewField.value ? `${reviewField.value} / verified` : "verified-by-reviewer";
+      const data = await apiJson<CorrectionResponse>("/api/analytics/corrections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          case_id: selectedCase.id,
+          field_key: reviewField.key,
+          old_value: reviewField.value,
+          new_value: correctedValue,
+          corrected_by: "checker.two",
+          document_type: selectedDocument?.document_type ?? "unknown",
+        }),
+      });
+      mergeCaseFromPayload(data);
+      setMessage("Correction recorded");
+      void loadReviewWorkbench(selectedCase.id);
+      void loadEnterpriseContext();
+    } catch (error) {
+      setAccuracy((current) => failedResource(current, error, "Correction failed"));
+      setMessage(error instanceof Error ? error.message : "Correction failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function configureTemplate() {
+    setBusy(true);
+    setActiveAction("configure-template");
+    setMessage("Configuring National ID template");
+    setTemplateStudio((current) => loadingResource(current));
+    try {
+      const data = await apiJson<{ studio: TemplateStudio }>("/api/admin/templates/studio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document_type: "national_id",
+          name: "Nepal National ID Card",
+          fields: [
+            { key: "national_id_number", label: "National ID Number", required: true, bbox: [100, 120, 520, 170] },
+            { key: "full_name", label: "Full Name", required: true, bbox: [100, 180, 650, 230] },
+            { key: "date_of_birth", label: "Date of Birth", required: true, bbox: [100, 238, 420, 286] },
+          ],
+          validation_rules: [
+            { field_key: "national_id_number", rule: "required", severity: "error" },
+            { field_key: "date_of_birth", rule: "date", severity: "warning" },
+          ],
+        }),
+      });
+      setTemplateStudio(readyResource(data.studio));
+      setMessage("Template configured");
+    } catch (error) {
+      setTemplateStudio((current) => failedResource(current, error, "Template configuration failed"));
+      setMessage(error instanceof Error ? error.message : "Template configuration failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function configurePanAdapter() {
+    setBusy(true);
+    setActiveAction("configure-pan");
+    setMessage("Configuring PAN adapter");
+    setVerificationAdapters((current) => loadingResource(current));
+    try {
+      await apiJson<{ adapter: VerificationAdapter }>("/api/verification/adapters/pan_registry/configure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "sandbox", endpoint: "https://ird.example.local/pan", enabled: true }),
+      });
+      const adapters = await apiJson<VerificationAdaptersResponse>("/api/verification/adapters", { cache: "no-store" });
+      setVerificationAdapters(readyResource(adapters));
+      setMessage("PAN adapter configured");
+    } catch (error) {
+      setVerificationAdapters((current) => failedResource(current, error, "PAN adapter configuration failed"));
+      setMessage(error instanceof Error ? error.message : "PAN adapter configuration failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function runPanAdapter() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("run-pan");
+    setMessage("Running PAN adapter");
+    setAdapterRun((current) => loadingResource(current));
+    try {
+      const data = await apiJson<VerificationAdapterRunResponse>(
+        `/api/cases/${selectedCase.id}/verification/pan_registry/run`,
+        { method: "POST", headers: { "Content-Type": "application/json" } },
+      );
+      setAdapterRun(readyResource(data));
+      mergeCaseFromPayload(data);
+      setMessage("PAN adapter run complete");
+      void loadReviewWorkbench(selectedCase.id);
+    } catch (error) {
+      setAdapterRun((current) => failedResource(current, error, "PAN adapter run failed"));
+      setMessage(error instanceof Error ? error.message : "PAN adapter run failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function configureCoreWebhook() {
+    setBusy(true);
+    setActiveAction("configure-webhook");
+    setMessage("Configuring CBS webhook");
+    setIntegrationOps((current) => loadingResource(current));
+    try {
+      await apiJson<{ webhook: IntegrationOperations["webhooks"][number] }>("/api/integrations/webhooks/configure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: "cbs_core",
+          url: "https://cbs.example.local/hooks/kyc",
+          events: ["case.approved", "case.rejected", "review.required"],
+        }),
+      });
+      setMessage("CBS webhook configured");
+      void loadEnterpriseContext();
+    } catch (error) {
+      setIntegrationOps((current) => failedResource(current, error, "Webhook configuration failed"));
+      setMessage(error instanceof Error ? error.message : "Webhook configuration failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function queueSftpBatch() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("queue-sftp");
+    setMessage("Queueing SFTP batch");
+    setIntegrationOps((current) => loadingResource(current));
+    try {
+      await apiJson<IntegrationOperations["retry_queue"][number]>("/api/integrations/sftp/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile_key: profileKey,
+          target: "sftp://core-bank.example/outbound",
+          case_ids: [selectedCase.id],
+        }),
+      });
+      setMessage("SFTP batch queued");
+      void loadEnterpriseContext();
+    } catch (error) {
+      setIntegrationOps((current) => failedResource(current, error, "SFTP batch failed"));
+      setMessage(error instanceof Error ? error.message : "SFTP batch failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function retryIntegration() {
+    if (!retryEvent) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("retry-integration");
+    setMessage("Scheduling retry");
+    setIntegrationOps((current) => loadingResource(current));
+    try {
+      await apiJson<{ event: IntegrationOperations["retry_queue"][number] }>(
+        `/api/integrations/retry/${retryEvent.event_id}`,
+        { method: "POST", headers: { "Content-Type": "application/json" } },
+      );
+      setMessage("Retry scheduled");
+      void loadEnterpriseContext();
+    } catch (error) {
+      setIntegrationOps((current) => failedResource(current, error, "Retry failed"));
+      setMessage(error instanceof Error ? error.message : "Retry failed");
     } finally {
       setBusy(false);
       setActiveAction(null);
@@ -1226,7 +1681,7 @@ export default function Home() {
           </Panel>
 
           <Panel title="Production Pipeline" icon={<SearchCheck size={16} />}>
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-4 xl:grid-cols-3">
               <div className="space-y-2">
                 <SectionLabel icon={<FileSearch size={15} />} label={`OCR: ${ocrPipeline.data?.active_provider ?? "loading"}`} />
                 {(ocrPipeline.data?.providers ?? []).map((provider) => (
@@ -1240,7 +1695,18 @@ export default function Home() {
                 ))}
               </div>
               <div className="space-y-2">
-                <SectionLabel icon={<FileCog size={15} />} label="Template Studio" />
+                <div className="flex items-center justify-between gap-2">
+                  <SectionLabel icon={<FileCog size={15} />} label="Template Studio" />
+                  <ActionButton
+                    busy={activeAction === "configure-template"}
+                    disabled={busy}
+                    icon={<FileCog size={14} />}
+                    onClick={configureTemplate}
+                  >
+                    NID
+                  </ActionButton>
+                </div>
+                <ResourceError resource={templateStudio} />
                 {(templateStudio.data?.templates ?? []).slice(0, 6).map((template) => (
                   <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={template.document_type}>
                     <div className="min-w-0">
@@ -1252,6 +1718,27 @@ export default function Home() {
                     <StatusBadge status={template.status} />
                   </div>
                 ))}
+              </div>
+              <div className="space-y-2">
+                <SectionLabel icon={<Gauge size={15} />} label={`Accuracy: ${accuracy.data?.correction_count ?? 0} corrections`} />
+                <ResourceError resource={accuracy} />
+                {accuracyRows.length ? (
+                  accuracyRows.map(([fieldKey, row]) => (
+                    <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={fieldKey}>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{labelize(fieldKey)}</p>
+                        <p className="mt-1 truncate text-zinc-500">
+                          {row.observed} observed · {row.corrections} corrected
+                        </p>
+                      </div>
+                      <span className="font-mono font-semibold">{pct(row.estimated_accuracy)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-500">
+                    Reviewer corrections will populate accuracy drift.
+                  </p>
+                )}
               </div>
             </div>
           </Panel>
@@ -1273,6 +1760,74 @@ export default function Home() {
                     <p className="mt-1 truncate text-zinc-500">{item.message}</p>
                   </div>
                   <StatusBadge status={item.status} />
+                </div>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel title="Reviewer Workbench" icon={<ClipboardCheck size={16} />}>
+            <ResourceError resource={reviewWorkbench} />
+            <div className="grid grid-cols-3 gap-2">
+              <Info label="Owner" value={reviewWorkbench.data?.assignment.reviewer ?? selectedCase?.review.reviewer ?? "unassigned"} />
+              <Info label="Queue" value={labelize(reviewWorkbench.data?.assignment.queue ?? "standard_kyc")} />
+              <Info label="Priority" value={labelize(reviewWorkbench.data?.assignment.priority ?? selectedCase?.risk_level ?? "normal")} />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <ActionButton
+                busy={activeAction === "assign-reviewer"}
+                disabled={busy || !selectedCase}
+                icon={<ClipboardCheck size={14} />}
+                onClick={assignReviewer}
+              >
+                Assign
+              </ActionButton>
+              <ActionButton
+                busy={activeAction === "review-comment"}
+                disabled={busy || !selectedCase}
+                icon={<FileText size={14} />}
+                onClick={addReviewComment}
+              >
+                Comment
+              </ActionButton>
+              <ActionButton
+                busy={activeAction === "request-rework"}
+                disabled={busy || !selectedCase}
+                icon={<RefreshCcw size={14} />}
+                onClick={requestRework}
+              >
+                Rework
+              </ActionButton>
+              <ActionButton
+                busy={activeAction === "record-correction"}
+                disabled={busy || !selectedCase || !reviewField}
+                icon={<Gauge size={14} />}
+                onClick={recordCorrection}
+              >
+                Correction
+              </ActionButton>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <Info label="Notes" value={`${reviewWorkbench.data?.comments.length ?? 0}`} />
+              <Info label="Rework" value={`${reviewWorkbench.data?.rework_requests.length ?? 0}`} />
+              <Info label="Crops" value={`${reviewWorkbench.data?.evidence_crops.length ?? 0}`} />
+            </div>
+            <div className="mt-3 max-h-48 space-y-2 overflow-auto pr-1">
+              {(reviewWorkbench.data?.comments ?? []).slice(-3).map((comment) => (
+                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs" key={comment.comment_id}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate font-semibold">{comment.author}</p>
+                    <span className="font-mono text-zinc-500">{formatDate(comment.created_at)}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-zinc-600">{comment.message}</p>
+                </div>
+              ))}
+              {(reviewWorkbench.data?.rework_requests ?? []).slice(-2).map((request) => (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={request.request_id}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate font-semibold text-amber-900">{request.reason}</p>
+                    <StatusBadge status={request.status} />
+                  </div>
+                  <p className="mt-1 truncate text-amber-800">{request.fields.join(", ") || "case-level"}</p>
                 </div>
               ))}
             </div>
@@ -1306,6 +1861,50 @@ export default function Home() {
               {!validationFindings.length && !verification.data?.checks.length ? (
                 <p className="text-sm text-zinc-500">No validation or verification output</p>
               ) : null}
+            </div>
+          </Panel>
+
+          <Panel title="Adapter Registry" icon={<Route size={16} />}>
+            <ResourceError resource={verificationAdapters} />
+            <ResourceError resource={adapterRun} />
+            <div className="grid grid-cols-2 gap-2">
+              <ActionButton
+                busy={activeAction === "configure-pan"}
+                disabled={busy}
+                icon={<FileCog size={14} />}
+                onClick={configurePanAdapter}
+              >
+                Configure PAN
+              </ActionButton>
+              <ActionButton
+                busy={activeAction === "run-pan"}
+                disabled={busy || !selectedCase}
+                icon={<Play size={14} />}
+                onClick={runPanAdapter}
+                tone="primary"
+              >
+                Run PAN
+              </ActionButton>
+            </div>
+            {adapterRun.data ? (
+              <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate font-semibold">{adapterRun.data.check.label}</p>
+                  <StatusBadge status={adapterRun.data.check.status} />
+                </div>
+                <p className="mt-1 line-clamp-2 text-zinc-600">{adapterRun.data.check.message}</p>
+              </div>
+            ) : null}
+            <div className="mt-3 max-h-56 space-y-2 overflow-auto pr-1">
+              {(verificationAdapters.data?.adapters ?? []).map((adapter) => (
+                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={adapter.key}>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{adapter.label}</p>
+                    <p className="mt-1 truncate text-zinc-500">{labelize(adapter.mode)}</p>
+                  </div>
+                  <StatusBadge status={adapter.status} />
+                </div>
+              ))}
             </div>
           </Panel>
 
@@ -1358,6 +1957,61 @@ export default function Home() {
                 <InfoBox label="Webhook" value={`${webhook.data.status} · ${compactId(webhook.data.event_id)}`} />
               ) : null}
               {reviewLink.data ? <InfoBox label="Review Link" value={reviewLink.data.url} /> : null}
+            </div>
+          </Panel>
+
+          <Panel title="Integration Operations" icon={<Network size={16} />}>
+            <ResourceError resource={integrationOps} />
+            <div className="grid grid-cols-3 gap-2">
+              <Info label="Webhooks" value={`${integrationOps.data?.webhooks.length ?? 0}`} />
+              <Info label="Retry" value={`${integrationOps.data?.retry_queue.length ?? 0}`} />
+              <Info label="SFTP" value={labelize(integrationOps.data?.sftp.status ?? "not_configured")} />
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <ActionButton
+                busy={activeAction === "configure-webhook"}
+                disabled={busy}
+                icon={<Network size={14} />}
+                onClick={configureCoreWebhook}
+              >
+                Hook
+              </ActionButton>
+              <ActionButton
+                busy={activeAction === "queue-sftp"}
+                disabled={busy || !selectedCase}
+                icon={<Upload size={14} />}
+                onClick={queueSftpBatch}
+              >
+                SFTP
+              </ActionButton>
+              <ActionButton
+                busy={activeAction === "retry-integration"}
+                disabled={busy || !retryEvent}
+                icon={<RefreshCcw size={14} />}
+                onClick={retryIntegration}
+              >
+                Retry
+              </ActionButton>
+            </div>
+            <div className="mt-3 max-h-44 space-y-2 overflow-auto pr-1">
+              {(integrationOps.data?.webhooks ?? []).slice(-2).map((hook) => (
+                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs" key={hook.key}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate font-semibold">{hook.key}</p>
+                    <StatusBadge status={hook.status} />
+                  </div>
+                  <p className="mt-1 truncate font-mono text-zinc-500">{hook.url}</p>
+                </div>
+              ))}
+              {(integrationOps.data?.retry_queue ?? []).slice(0, 2).map((event) => (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={event.event_id}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate font-mono font-semibold text-amber-900">{event.event_id}</p>
+                    <StatusBadge status={event.status} />
+                  </div>
+                  <p className="mt-1 truncate text-amber-800">{event.last_error ?? event.target ?? event.mode}</p>
+                </div>
+              ))}
             </div>
           </Panel>
 

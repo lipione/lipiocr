@@ -160,6 +160,101 @@ def template_studio():
     return build_template_studio()
 
 
+@app.post("/api/admin/templates/studio", status_code=201)
+def upsert_template_studio(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.models import TemplateField
+    from app.services.production_readiness import build_template_studio
+    from app.services.templates import upsert_template
+
+    require_permission(settings, http_request, "manage_templates")
+    document_type = DocumentType(str(payload.get("document_type") or "unknown"))
+    fields = [
+        TemplateField(
+            key=str(field.get("key") or ""),
+            label=str(field.get("label") or field.get("key") or ""),
+            required=bool(field.get("required", True)),
+            bbox=list(field.get("bbox") or [0, 0, 0, 0]),
+        )
+        for field in list(payload.get("fields") or [])
+    ]
+    result = upsert_template(
+        document_type=document_type,
+        name=str(payload.get("name") or document_type.value.replace("_", " ").title()),
+        fields=fields,
+        validation_rules=list(payload.get("validation_rules") or []),
+    )
+    result["studio"] = build_template_studio()
+    return result
+
+
+@app.get("/api/integrations/operations")
+def integration_operations():
+    from app.services.integration_operations import integration_operations as build_operations
+
+    return build_operations()
+
+
+@app.post("/api/integrations/webhooks/configure", status_code=201)
+def configure_integration_webhook(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.integration_operations import configure_webhook
+
+    require_permission(settings, http_request, "manage_integrations")
+    return configure_webhook(payload)
+
+
+@app.post("/api/integrations/sftp/batch", status_code=202)
+def queue_integration_batch(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.integration_operations import queue_sftp_batch
+
+    require_permission(settings, http_request, "export_case")
+    return queue_sftp_batch(payload)
+
+
+@app.post("/api/integrations/retry/{event_id}")
+def retry_integration_event(event_id: str, http_request: Request):
+    from app.services.integration_operations import retry_event
+
+    require_permission(settings, http_request, "manage_integrations")
+    return retry_event(event_id)
+
+
+@app.get("/api/verification/adapters")
+def verification_adapters():
+    from app.services.verification_registry import list_adapters
+
+    return list_adapters()
+
+
+@app.post("/api/verification/adapters/{adapter_key}/configure")
+def configure_verification_adapter(
+    adapter_key: str,
+    http_request: Request,
+    payload: Dict[str, object] = Body(default_factory=dict),
+):
+    from app.services.verification_registry import configure_adapter
+
+    require_permission(settings, http_request, "manage_integrations")
+    return configure_adapter(adapter_key, payload)
+
+
+@app.get("/api/analytics/accuracy")
+def accuracy_analytics():
+    from app.services.accuracy_analytics import build_accuracy_analytics
+
+    return build_accuracy_analytics(repository.list_cases())
+
+
+@app.post("/api/analytics/corrections", status_code=201)
+def record_accuracy_correction(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.accuracy_analytics import record_correction
+
+    require_permission(settings, http_request, "edit_fields")
+    case = repository.get_case(str(payload.get("case_id") or ""))
+    result = record_correction(case, payload)
+    repository.save_case(case)
+    return result
+
+
 @app.post("/api/cases", status_code=201)
 def create_case(http_request: Request, request: CaseCreateRequest):
     require_permission(settings, http_request, "create_case")
@@ -189,6 +284,45 @@ def list_cases():
 @app.get("/api/cases/{case_id}")
 def get_case(case_id: str):
     return repository.get_case(case_id)
+
+
+@app.get("/api/review/workbench/{case_id}")
+def review_workbench(case_id: str):
+    from app.services.reviewer_workbench import build_workbench
+
+    return build_workbench(repository.get_case(case_id))
+
+
+@app.post("/api/cases/{case_id}/assign")
+def assign_case(case_id: str, http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.reviewer_workbench import assign_case as assign
+
+    require_permission(settings, http_request, "review_case")
+    case = repository.get_case(case_id)
+    result = assign(case, payload)
+    repository.save_case(case)
+    return result
+
+
+@app.post("/api/cases/{case_id}/comments", status_code=201)
+def add_case_comment(case_id: str, http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.reviewer_workbench import add_comment
+
+    require_permission(settings, http_request, "review_case")
+    case = repository.get_case(case_id)
+    result = add_comment(case, payload)
+    repository.save_case(case)
+    return result
+
+
+@app.post("/api/cases/{case_id}/rework")
+def request_case_rework(case_id: str, http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.reviewer_workbench import request_rework
+
+    require_permission(settings, http_request, "review_case")
+    case = repository.get_case(case_id)
+    request_rework(case, payload)
+    return repository.save_case(case)
 
 
 @app.get("/api/cases/{case_id}/intelligence")
@@ -250,6 +384,17 @@ def verification_run(case_id: str, http_request: Request):
     require_permission(settings, http_request, "submit_review")
     case = repository.get_case(case_id)
     result = run_verification(case, repository.list_cases())
+    repository.save_case(case)
+    return result
+
+
+@app.post("/api/cases/{case_id}/verification/{adapter_key}/run")
+def verification_adapter_run(case_id: str, adapter_key: str, http_request: Request):
+    from app.services.verification_registry import run_adapter
+
+    require_permission(settings, http_request, "submit_review")
+    case = repository.get_case(case_id)
+    result = run_adapter(case, adapter_key)
     repository.save_case(case)
     return result
 

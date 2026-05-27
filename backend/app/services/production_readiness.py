@@ -6,7 +6,7 @@ from typing import Iterable
 
 from app.models import CaseStatus, KycCase
 from app.services.integrations import list_integration_profiles
-from app.services.templates import list_templates
+from app.services.templates import list_templates, list_validation_rules
 
 
 def _component(key: str, label: str, status: str, detail: str, next_step: str) -> dict[str, object]:
@@ -229,8 +229,10 @@ def build_operations_dashboard(cases: Iterable[KycCase]) -> dict[str, object]:
 
 
 def build_template_studio() -> dict[str, object]:
+    validation_rules = list_validation_rules()
     templates = []
     for template in list_templates():
+        rule_count = len(validation_rules.get(template.document_type.value, []))
         templates.append(
             {
                 "document_type": template.document_type.value,
@@ -239,6 +241,7 @@ def build_template_studio() -> dict[str, object]:
                 "required_fields": [field.key for field in template.fields if field.required],
                 "status": "configured",
                 "mode": "template_coordinates",
+                "validation_rule_count": rule_count,
             }
         )
 
@@ -259,6 +262,7 @@ def build_template_studio() -> dict[str, object]:
                     "required_fields": [],
                     "status": "planned",
                     "mode": "full_page_reasoning",
+                    "validation_rule_count": 0,
                 }
             )
 
@@ -271,4 +275,5 @@ def build_template_studio() -> dict[str, object]:
             "Full-page reasoning handles mixed packets and unknown layouts",
             "Human review remains mandatory for uncertain or regulated fields",
         ],
+        "validation_rules": validation_rules,
     }

@@ -8,10 +8,13 @@ LipiOCR Enterprise is a Nepal-focused KYC and financial document intelligence pl
 - Full-page OCR evidence model with blocks, bounding boxes, confidence, and page references.
 - Gemma 4 26B reasoning client for OpenAI-compatible vLLM endpoints.
 - Enterprise review console for case creation, document upload, evidence inspection, checklist intelligence, validation findings, approval, audit, verification, and JSON export.
+- Reviewer workbench for assignment, comments, rework requests, evidence crops, and correction tracking.
+- Template studio for coordinate-based document templates with validation rules.
 - Nepal KYC intelligence APIs for individual KYC, business KYB, loan onboarding, and document digitization readiness.
-- Integration kit APIs for REST, signed webhooks, SFTP-ready batch delivery, embedded review links, and CBS/LOS/AML export profiles.
+- Integration kit APIs for REST, signed webhooks, configurable webhook delivery, SFTP-ready batch delivery, retry queues, embedded review links, and CBS/LOS/AML export profiles.
 - Enterprise controls APIs for tenant policy, branch controls, RBAC, maker-checker queue, retention posture, and audit hash-chain summaries.
-- Provider-neutral advanced verification interfaces for National ID/PAN registry, AML/sanctions, face/liveness, tamper signals, signature/photo presence, and duplicate detection.
+- Provider-neutral advanced verification interfaces and adapter registry for National ID/PAN registry, AML/sanctions, face/liveness, tamper signals, signature/photo presence, and duplicate detection.
+- Accuracy analytics from reviewer corrections, field confidence drift, and document-type performance.
 - Docker deployment shape for `/data/lipiocr` with API, frontend, Postgres, Redis, and MinIO.
 
 ## Architecture
@@ -40,13 +43,22 @@ Core case flow:
 - `POST /api/cases/{case_id}/classify`
 - `POST /api/cases/{case_id}/validate`
 - `POST /api/cases/{case_id}/verification/run`
+- `POST /api/cases/{case_id}/verification/{adapter_key}/run`
 - `PATCH /api/cases/{case_id}/review`
 - `GET /api/cases/{case_id}/export-profile/{profile_key}`
+- `GET /api/review/workbench/{case_id}`
+- `POST /api/cases/{case_id}/assign`
+- `POST /api/cases/{case_id}/comments`
+- `POST /api/cases/{case_id}/rework`
 
 Institution integration and controls:
 
 - `GET /api/integrations/profiles`
+- `GET /api/integrations/operations`
 - `POST /api/integrations/webhook/test`
+- `POST /api/integrations/webhooks/configure`
+- `POST /api/integrations/sftp/batch`
+- `POST /api/integrations/retry/{event_id}`
 - `POST /api/cases/{case_id}/embedded-review-link`
 - `GET /api/platform/status`
 - `GET /api/ocr/pipeline`
@@ -55,7 +67,12 @@ Institution integration and controls:
 - `GET /api/admin/rbac`
 - `GET /api/admin/audit-integrity`
 - `GET /api/admin/templates/studio`
+- `POST /api/admin/templates/studio`
 - `GET /api/review/queue`
+- `GET /api/verification/adapters`
+- `POST /api/verification/adapters/{adapter_key}/configure`
+- `GET /api/analytics/accuracy`
+- `POST /api/analytics/corrections`
 
 External systems that require real institution credentials return explicit `not_configured` states instead of pretending to verify live National ID, PAN, AML, liveness, or SFTP connections.
 
@@ -66,8 +83,10 @@ The frontend is organized as an operations cockpit:
 - Work queue lanes for intake, review, verification, exceptions, and export.
 - Platform readiness for OCR, Gemma 4, persistence, object storage, security, and integrations.
 - Case workbench with OCR evidence, extracted fields, split/classify/validate/verify actions, and maker-checker approval.
-- Decision rail with KYC checklist, verification results, signed webhook test, embedded review link, and export payload.
-- Production pipeline view for OCR providers and document-template studio readiness.
+- Reviewer workbench with assignment, comments, maker rework, evidence crops, and correction capture.
+- Decision rail with KYC checklist, verification results, adapter registry runs, signed webhook test, embedded review link, and export payload.
+- Integration operations with configurable webhooks, SFTP batch queue, and retry scheduling.
+- Production pipeline view for OCR providers, document-template studio, and reviewer-driven accuracy analytics.
 
 ## Run Locally
 

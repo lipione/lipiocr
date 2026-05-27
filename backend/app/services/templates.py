@@ -3,6 +3,9 @@ from typing import Dict, List
 from app.models import DocumentTemplate, DocumentType, TemplateField
 
 
+VALIDATION_RULES: Dict[DocumentType, List[Dict[str, object]]] = {}
+
+
 TEMPLATES: Dict[DocumentType, DocumentTemplate] = {
     DocumentType.citizenship: DocumentTemplate(
         document_type=DocumentType.citizenship,
@@ -56,3 +59,29 @@ def list_templates() -> List[DocumentTemplate]:
 
 def get_template(document_type: DocumentType) -> DocumentTemplate:
     return TEMPLATES[document_type]
+
+
+def upsert_template(
+    *,
+    document_type: DocumentType,
+    name: str,
+    fields: List[TemplateField],
+    validation_rules: List[Dict[str, object]],
+) -> Dict[str, object]:
+    TEMPLATES[document_type] = DocumentTemplate(document_type=document_type, name=name, fields=fields)
+    VALIDATION_RULES[document_type] = validation_rules
+    return {
+        "template": {
+            "document_type": document_type.value,
+            "name": name,
+            "field_count": len(fields),
+            "required_fields": [field.key for field in fields if field.required],
+            "status": "configured",
+            "mode": "template_coordinates",
+        },
+        "validation_rules": validation_rules,
+    }
+
+
+def list_validation_rules() -> Dict[str, List[Dict[str, object]]]:
+    return {key.value: value for key, value in VALIDATION_RULES.items()}
