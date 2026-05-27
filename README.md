@@ -76,17 +76,19 @@ Institution integration and controls:
 
 External systems that require real institution credentials return explicit `not_configured` states instead of pretending to verify live National ID, PAN, AML, liveness, or SFTP connections.
 
-## Dashboard UX
+## Enterprise UX
 
-The frontend is organized as an operations cockpit:
+The frontend is now organized as a route-backed enterprise workspace instead of one overloaded demo page:
 
-- Work queue lanes for intake, review, verification, exceptions, and export.
-- Platform readiness for OCR, Gemma 4, persistence, object storage, security, and integrations.
-- Case workbench with OCR evidence, extracted fields, split/classify/validate/verify actions, and maker-checker approval.
-- Reviewer workbench with assignment, comments, maker rework, evidence crops, and correction capture.
-- Decision rail with KYC checklist, verification results, adapter registry runs, signed webhook test, embedded review link, and export payload.
-- Integration operations with configurable webhooks, SFTP batch queue, and retry scheduling.
-- Production pipeline view for OCR providers, document-template studio, and reviewer-driven accuracy analytics.
+- `/`: Command center for portfolio KPIs, platform readiness, work queues, and decision signals.
+- `/cases`: Case management with intake, selected case detail, review, verification, export, and audit context.
+- `/documents`: Document intake, full-packet upload, OCR evidence, extracted fields, and decision checklist.
+- `/review`: Maker-checker workbench with assignment, comments, rework, correction capture, and audit history.
+- `/verification`: Verification hub with case evidence, validation findings, registry adapter configuration, and adapter runs.
+- `/templates`: Template studio and production extraction pipeline.
+- `/integrations`: Integration center for CBS/LOS/CRM/DMS profiles, webhooks, SFTP batches, retry queue, and payload export.
+- `/analytics`: Accuracy analytics for reviewer corrections, field confidence, and drift.
+- `/admin`: Platform readiness and audit posture for tenant/security operations.
 
 ## Run Locally
 
