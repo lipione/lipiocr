@@ -765,11 +765,11 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     section === "command" ? "grid gap-4 xl:grid-cols-3" : section === "templates" ? "grid gap-4 xl:grid-cols-2" : "grid gap-4";
   const workspaceGridClass = showLeftRail
     ? showRightRail
-      ? "mx-auto grid max-w-[1800px] gap-4 px-4 py-5 sm:px-6 xl:grid-cols-[188px_260px_minmax(280px,1fr)_300px] 2xl:grid-cols-[232px_340px_minmax(0,1fr)_420px]"
-      : "mx-auto grid max-w-[1600px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[216px_320px_minmax(0,1fr)] 2xl:grid-cols-[232px_360px_minmax(0,1fr)]"
+      ? "mx-auto grid max-w-[1720px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[300px_minmax(360px,1fr)_360px] 2xl:grid-cols-[340px_minmax(0,1fr)_420px]"
+      : "mx-auto grid max-w-[1480px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]"
     : showRightRail
-      ? "mx-auto grid max-w-[1600px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[216px_minmax(0,1fr)_380px] 2xl:grid-cols-[232px_minmax(0,1fr)_420px]"
-      : "mx-auto grid max-w-[1380px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[216px_minmax(0,1fr)] 2xl:grid-cols-[232px_minmax(0,1fr)]";
+      ? "mx-auto grid max-w-[1480px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_420px]"
+      : "mx-auto grid max-w-[1180px] gap-5 px-4 py-5 sm:px-6";
 
   const summaryCounts = operations.data?.counts ?? {
     total_cases: cases.length,
@@ -1448,6 +1448,9 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
       </header>
 
       <section className="border-b border-border-soft/80 bg-slate-50/70">
+        <div className="mx-auto max-w-[1800px] px-4 pt-4 sm:px-6">
+          <ModuleSwitcher activeHref={activeHref} activeSection={section} />
+        </div>
         <div className="mx-auto grid max-w-[1800px] gap-3 px-4 py-4 sm:px-6 lg:grid-cols-5">
           <Kpi icon={<Boxes size={18} />} label="Cases" value={summaryCounts.total_cases} />
           <Kpi icon={<ClipboardCheck size={18} />} label="Review" value={summaryCounts.review_required} />
@@ -1458,32 +1461,6 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
       </section>
 
       <div className={workspaceGridClass}>
-        <aside className="space-y-2">
-          <nav className="sticky top-32 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-[var(--shadow-soft)]">
-            {workspaceNav.map((item) => {
-              const active = item.href === activeHref || item.section === section;
-              return (
-                <Link
-                  className={`group mb-1 grid grid-cols-[28px_1fr] gap-2 rounded-xl px-3 py-2.5 text-sm last:mb-0 ${
-                    active
-                      ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
-                      : "text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-indigo-700"
-                  }`}
-                  href={item.href}
-                  key={item.section}
-                >
-                  <span className={active ? "text-white" : "text-slate-400 group-hover:text-indigo-600"}>{item.icon}</span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-bold">{item.label}</span>
-                    <span className={`mt-0.5 block line-clamp-2 text-xs ${active ? "text-indigo-100" : "text-slate-500"}`}>
-                      {item.description}
-                    </span>
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-        </aside>
         {showLeftRail ? (
         <aside className="space-y-4">
           {section === "cases" ? (
@@ -1931,7 +1908,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           </Panel>
           ) : null}
 
-          {["review", "cases"].includes(section) ? (
+          {section === "review" ? (
           <Panel title="Reviewer Workbench" icon={<ClipboardCheck size={16} />}>
             <ResourceError resource={reviewWorkbench} />
             <div className="grid grid-cols-3 gap-2">
@@ -2001,7 +1978,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           </Panel>
           ) : null}
 
-          {["verification", "cases"].includes(section) ? (
+          {section === "verification" ? (
           <Panel title="Verification" icon={<LockKeyhole size={16} />}>
             <div className="grid grid-cols-3 gap-2">
               <Info label="Decision" value={verification.data?.decision ?? "pending"} />
@@ -2080,7 +2057,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           </Panel>
           ) : null}
 
-          {["integrations", "cases"].includes(section) ? (
+          {section === "integrations" ? (
           <Panel title="Integration Handoff" icon={<Plug size={16} />}>
             <div className="space-y-3">
               <FieldLabel label="Export Profile">
@@ -2192,7 +2169,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           </Panel>
           ) : null}
 
-          {["integrations", "cases"].includes(section) ? (
+          {section === "integrations" ? (
           <Panel title="Export Payload" icon={<Database size={16} />}>
             <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-50">
               {exportJson || "{ }"}
@@ -2262,6 +2239,32 @@ function Pill({ icon, label }: { icon: ReactNode; label: string }) {
       <span className="shrink-0 text-indigo-600">{icon}</span>
       <span className="truncate">{label}</span>
     </span>
+  );
+}
+
+function ModuleSwitcher({ activeHref, activeSection }: { activeHref: string; activeSection: WorkspaceSection }) {
+  return (
+    <nav className="rounded-[1.35rem] border border-slate-200 bg-white/95 p-2 shadow-[var(--shadow-soft)]">
+      <div className="flex gap-2 overflow-x-auto">
+        {workspaceNav.map((item) => {
+          const active = item.href === activeHref || item.section === activeSection;
+          return (
+            <Link
+              className={`group inline-flex min-w-fit items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold ${
+                active
+                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
+                  : "text-slate-600 hover:-translate-y-0.5 hover:bg-indigo-50 hover:text-indigo-700"
+              }`}
+              href={item.href}
+              key={item.section}
+            >
+              <span className={active ? "text-white" : "text-slate-400 group-hover:text-indigo-600"}>{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
