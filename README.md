@@ -48,12 +48,26 @@ Institution integration and controls:
 - `GET /api/integrations/profiles`
 - `POST /api/integrations/webhook/test`
 - `POST /api/cases/{case_id}/embedded-review-link`
+- `GET /api/platform/status`
+- `GET /api/ocr/pipeline`
+- `GET /api/dashboard/operations`
 - `GET /api/admin/tenant`
 - `GET /api/admin/rbac`
 - `GET /api/admin/audit-integrity`
+- `GET /api/admin/templates/studio`
 - `GET /api/review/queue`
 
 External systems that require real institution credentials return explicit `not_configured` states instead of pretending to verify live National ID, PAN, AML, liveness, or SFTP connections.
+
+## Dashboard UX
+
+The frontend is organized as an operations cockpit:
+
+- Work queue lanes for intake, review, verification, exceptions, and export.
+- Platform readiness for OCR, Gemma 4, persistence, object storage, security, and integrations.
+- Case workbench with OCR evidence, extracted fields, split/classify/validate/verify actions, and maker-checker approval.
+- Decision rail with KYC checklist, verification results, signed webhook test, embedded review link, and export payload.
+- Production pipeline view for OCR providers and document-template studio readiness.
 
 ## Run Locally
 

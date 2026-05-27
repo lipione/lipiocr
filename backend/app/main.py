@@ -128,6 +128,34 @@ def review_queue():
     return build_review_queue(repository.list_cases())
 
 
+@app.get("/api/platform/status")
+def platform_status():
+    from app.services.production_readiness import build_platform_status
+
+    return build_platform_status(settings, repository.list_cases())
+
+
+@app.get("/api/ocr/pipeline")
+def ocr_pipeline():
+    from app.services.production_readiness import build_ocr_pipeline_profile
+
+    return build_ocr_pipeline_profile(settings)
+
+
+@app.get("/api/dashboard/operations")
+def dashboard_operations():
+    from app.services.production_readiness import build_operations_dashboard
+
+    return build_operations_dashboard(repository.list_cases())
+
+
+@app.get("/api/admin/templates/studio")
+def template_studio():
+    from app.services.production_readiness import build_template_studio
+
+    return build_template_studio()
+
+
 @app.post("/api/cases", status_code=201)
 def create_case(request: CaseCreateRequest):
     case = KycCase(

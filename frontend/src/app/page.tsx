@@ -4,28 +4,36 @@ import {
   Activity,
   AlertTriangle,
   BadgeCheck,
-  Building2,
+  Boxes,
+  BrainCircuit,
   ClipboardCheck,
+  Database,
   Download,
-  FileStack,
+  Eye,
+  FileCog,
   FileSearch,
   FileText,
   Fingerprint,
-  KeyRound,
+  Gauge,
+  History,
+  Layers3,
   Link2,
   Loader2,
+  LockKeyhole,
   Network,
   Play,
   Plug,
   Plus,
   RefreshCcw,
-  Save,
+  Route,
+  SearchCheck,
+  ShieldAlert,
   ShieldCheck,
   SplitSquareHorizontal,
   Upload,
-  Zap,
+  Workflow,
 } from "lucide-react";
-import { type Dispatch, FormEvent, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
 type CaseType = "individual_kyc" | "business_kyb" | "loan_onboarding" | "document_digitization";
 type CaseStatus = "created" | "processing" | "review_required" | "approved" | "rejected" | "exported";
@@ -123,6 +131,7 @@ type KycCase = {
     reviewed_at?: string | null;
   };
   created_at: string;
+  updated_at?: string;
 };
 
 type AiHealth = {
@@ -132,150 +141,200 @@ type AiHealth = {
   enabled: boolean;
 };
 
-type IntegrationManifest = {
-  modes: string[];
-  events: string[];
-  core_endpoints: string[];
-};
-
-type LoadStatus = "idle" | "loading" | "ready" | "error";
-
 type ResourceState<T> = {
-  status: LoadStatus;
+  status: "idle" | "loading" | "ready" | "error";
   data: T | null;
   error: string | null;
   updatedAt: string | null;
 };
 
-type IntelligenceChecklistItem = {
-  id?: string;
-  key?: string;
-  label?: string;
-  title?: string;
+type ChecklistItem = {
+  key: string;
+  label: string;
+  category?: string;
+  required?: boolean;
+  satisfied?: boolean;
   status?: string;
   severity?: string;
   message?: string;
-  evidence?: string;
-  category?: string;
   confidence?: number;
 };
 
 type CaseIntelligence = {
-  summary?: string;
-  completeness_score?: number;
-  risk_score?: number;
-  checklist?: IntelligenceChecklistItem[];
-  policy_signals?: IntelligenceChecklistItem[];
-  next_actions?: string[];
+  case_id: string;
+  country: string;
+  workflow: string;
+  readiness_score: number;
+  completeness_score: number;
+  risk_score: number;
+  summary: string;
+  checklist: ChecklistItem[];
+  policy_signals: ChecklistItem[];
+  gaps: string[];
+  next_actions: string[];
+  recommended_action: string;
 };
 
 type PacketDocument = {
+  document_id?: string;
   id?: string;
   filename?: string;
   document_type?: string;
   declared_document_type?: string;
-  status?: string;
+  predicted_type?: string;
+  previous_type?: string;
+  action?: string;
   confidence?: number;
-  pages?: number[];
   page_count?: number;
   reason?: string;
 };
 
 type SplitPreviewResponse = {
-  packet_id?: string;
-  documents?: PacketDocument[];
-  pages?: PacketDocument[];
-  warnings?: string[];
+  case_id: string;
+  segments: PacketDocument[];
+  documents: PacketDocument[];
+  warnings: string[];
 };
 
 type ClassificationResponse = {
-  documents?: PacketDocument[];
-  classifications?: PacketDocument[];
-  summary?: string;
+  case_id: string;
+  classifications: PacketDocument[];
+  documents: PacketDocument[];
+  summary: string;
   case?: KycCase;
 };
 
 type ValidationResponse = {
-  status?: string;
-  findings?: ValidationFinding[];
-  warnings?: string[];
+  case_id: string;
+  status: string;
+  summary: {
+    finding_count: number;
+    blocking_issue_count: number;
+    warning_count: number;
+  };
+  findings: ValidationFinding[];
   case?: KycCase;
 };
 
+type VerificationCheck = {
+  key: string;
+  label: string;
+  status: string;
+  severity: string;
+  message: string;
+  next_step: string;
+};
+
 type VerificationResponse = {
-  run_id?: string;
-  status?: string;
-  decision?: string;
-  score?: number;
-  checks?: IntelligenceChecklistItem[];
-  findings?: ValidationFinding[];
+  case_id: string;
+  run_id: string;
+  status: string;
+  decision: string;
+  score: number;
+  checks: VerificationCheck[];
+  next_steps: string[];
   case?: KycCase;
 };
 
 type IntegrationProfile = {
-  key?: string;
-  profile_key?: string;
-  name?: string;
-  label?: string;
-  category?: string;
-  status?: string;
-  adapter_status?: string;
-  mode?: string;
-  destination?: string;
-  description?: string;
-  configured?: boolean;
+  key: string;
+  name: string;
+  category: string;
+  mode: string;
+  status: string;
+  description: string;
 };
 
-type IntegrationProfilesResponse =
-  | IntegrationProfile[]
-  | {
-      profiles?: IntegrationProfile[];
-      adapters?: IntegrationProfile[];
-      items?: IntegrationProfile[];
-    };
+type IntegrationProfilesResponse = {
+  product: string;
+  country: string;
+  profiles: IntegrationProfile[];
+  export_profiles: string[];
+  events: string[];
+  security: Record<string, unknown>;
+};
+
+type PlatformComponent = {
+  key: string;
+  label: string;
+  status: string;
+  detail: string;
+  next_step: string;
+};
+
+type PlatformStatus = {
+  product: string;
+  country: string;
+  deployment_target: string;
+  case_count: number;
+  components: PlatformComponent[];
+  next_actions: string[];
+};
+
+type OperationsLane = {
+  key: string;
+  label: string;
+  count: number;
+  description: string;
+  case_ids: string[];
+};
+
+type OperationsDashboard = {
+  counts: {
+    total_cases: number;
+    documents: number;
+    review_required: number;
+    approved: number;
+    exceptions: number;
+  };
+  lanes: OperationsLane[];
+  bottlenecks: { key: string; severity: string; message: string }[];
+  branch_load: Record<string, number>;
+  case_type_load: Record<string, number>;
+  next_best_actions: string[];
+};
+
+type OcrPipelineProfile = {
+  active_provider: string;
+  providers: { key: string; label: string; status: string; best_for: string }[];
+  preprocessing_stages: { key: string; label: string; status: string }[];
+  outputs: string[];
+  production_requirements: string[];
+};
+
+type TemplateStudio = {
+  country: string;
+  templates: {
+    document_type: string;
+    name: string;
+    field_count: number;
+    required_fields: string[];
+    status: string;
+    mode: string;
+  }[];
+  extraction_modes: string[];
+  rules: string[];
+};
 
 type WebhookTestResponse = {
-  status?: string;
-  profile_key?: string;
-  event_id?: string;
-  message?: string;
+  status: string;
+  event_id: string;
+  signature?: string;
 };
 
 type EmbeddedReviewLinkResponse = {
-  url?: string;
-  review_url?: string;
-  expires_at?: string;
+  url: string;
+  review_url: string;
+  token: string;
+  expires_at: string;
 };
 
-type TenantAdminResponse = {
-  institution_name?: string;
-  tenant_key?: string;
-  environment?: string;
-  data_residency?: string;
-  retention_days?: number;
-  features?: string[];
+type ExportProfileResponse = {
+  case_id: string;
+  profile_key: string;
+  generated_at: string;
+  payload: unknown;
 };
-
-type RbacResponse = {
-  roles?: { name?: string; users?: number; permissions?: string[] }[];
-  maker_checker?: boolean;
-  active_users?: number;
-};
-
-type AuditIntegrityResponse = {
-  status?: string;
-  last_verified_at?: string;
-  ledger_head?: string;
-  gaps?: number;
-  immutable_events?: number;
-};
-
-type ReviewQueueResponse =
-  | {
-      items?: { case_id?: string; applicant_name?: string; status?: string; risk_level?: string; age_minutes?: number }[];
-      counts?: Record<string, number>;
-    }
-  | { case_id?: string; applicant_name?: string; status?: string; risk_level?: string; age_minutes?: number }[];
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
 
@@ -296,50 +355,6 @@ const documentTypes: { value: DocumentType; label: string }[] = [
   { value: "company_registration", label: "Company Registration" },
   { value: "board_resolution", label: "Board Resolution" },
   { value: "unknown", label: "Unknown" },
-];
-
-const statusClasses: Record<CaseStatus, string> = {
-  created: "border-zinc-300 bg-zinc-50 text-zinc-700",
-  processing: "border-blue-200 bg-blue-50 text-blue-700",
-  review_required: "border-amber-200 bg-amber-50 text-amber-700",
-  approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  rejected: "border-rose-200 bg-rose-50 text-rose-700",
-  exported: "border-teal-200 bg-teal-50 text-teal-700",
-};
-
-const defaultIntegrationProfiles: IntegrationProfile[] = [
-  {
-    key: "core_banking",
-    name: "Core Banking CBS",
-    category: "Core ledger",
-    status: "not_configured",
-    mode: "export_profile",
-    destination: "CBS customer master",
-  },
-  {
-    key: "mobile_banking",
-    name: "Mobile Banking KYC",
-    category: "Digital channel",
-    status: "not_configured",
-    mode: "webhook",
-    destination: "Wallet and mobile app onboarding",
-  },
-  {
-    key: "nrb_goaml",
-    name: "NRB / FIU Screening",
-    category: "Regulatory",
-    status: "not_configured",
-    mode: "verification",
-    destination: "Sanctions and adverse media checks",
-  },
-  {
-    key: "document_vault",
-    name: "Document Vault Archive",
-    category: "Records",
-    status: "not_configured",
-    mode: "embedded_review",
-    destination: "Retention and audit evidence",
-  },
 ];
 
 function emptyResource<T>(): ResourceState<T> {
@@ -363,15 +378,28 @@ function failedResource<T>(current: ResourceState<T>, error: unknown, fallback: 
   };
 }
 
-function labelize(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+function labelize(value?: string) {
+  return (value ?? "unknown").replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function compactId(value: string) {
-  return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
+function compactId(value?: string | null) {
+  if (!value) {
+    return "none";
+  }
+  return value.length > 20 ? `${value.slice(0, 9)}...${value.slice(-7)}` : value;
 }
 
-function formatDate(value: string) {
+function pct(value?: number) {
+  if (typeof value !== "number") {
+    return "n/a";
+  }
+  return value <= 1 ? `${Math.round(value * 100)}%` : `${Math.round(value)}%`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "none";
+  }
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "2-digit",
@@ -380,67 +408,38 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function pct(value: number) {
-  return `${Math.round(value * 100)}%`;
-}
-
-function optionalPct(value?: number) {
-  if (typeof value !== "number") {
-    return "n/a";
-  }
-  return value <= 1 ? pct(value) : `${Math.round(value)}%`;
-}
-
 function statusTone(status?: string) {
-  const normalized = (status ?? "unknown").toLowerCase();
-  if (["approved", "configured", "ready", "passed", "complete", "verified", "ok", "healthy"].includes(normalized)) {
+  const value = (status ?? "unknown").toLowerCase();
+  if (["approved", "configured", "passed", "clean", "ready", "verified"].includes(value)) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
-  if (["review_required", "warning", "pending", "partial", "not_configured", "not configured"].includes(normalized)) {
+  if (["partial", "warning", "review_required", "needs_review", "missing", "not_configured"].includes(value)) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
-  if (["rejected", "failed", "error", "blocked", "missing"].includes(normalized)) {
+  if (["error", "failed", "rejected", "blocked", "high"].includes(value)) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
-  if (["processing", "running", "loading"].includes(normalized)) {
+  if (["processing", "loading", "running"].includes(value)) {
     return "border-blue-200 bg-blue-50 text-blue-700";
   }
   return "border-zinc-200 bg-zinc-50 text-zinc-700";
 }
 
-function normalizeProfiles(data: IntegrationProfilesResponse | null) {
-  if (!data) {
-    return [];
-  }
-  if (Array.isArray(data)) {
-    return data;
-  }
-  return data.profiles ?? data.adapters ?? data.items ?? [];
-}
-
-function profileKey(profile: IntegrationProfile) {
-  return profile.key ?? profile.profile_key ?? "profile";
-}
-
-function profileName(profile: IntegrationProfile) {
-  return profile.name ?? profile.label ?? labelize(profileKey(profile));
-}
-
-function profileStatus(profile: IntegrationProfile) {
-  if (profile.status) {
-    return profile.status;
-  }
-  if (profile.adapter_status) {
-    return profile.adapter_status;
-  }
-  return profile.configured === false ? "not_configured" : "configured";
+function blockStyle(block: OcrBlock, page: OcrPage) {
+  const [x1, y1, x2, y2] = block.bbox;
+  return {
+    left: `${(x1 / page.width) * 100}%`,
+    top: `${(y1 / page.height) * 100}%`,
+    width: `${((x2 - x1) / page.width) * 100}%`,
+    height: `${((y2 - y1) / page.height) * 100}%`,
+  };
 }
 
 function packetDocuments(data: SplitPreviewResponse | ClassificationResponse | null) {
   if (!data) {
     return [];
   }
-  return data.documents ?? ("classifications" in data ? data.classifications : undefined) ?? ("pages" in data ? data.pages : undefined) ?? [];
+  return "segments" in data ? data.segments : data.classifications;
 }
 
 function isKycCase(value: unknown): value is KycCase {
@@ -454,22 +453,11 @@ function isKycCase(value: unknown): value is KycCase {
   );
 }
 
-function blockStyle(block: OcrBlock, page: OcrPage) {
-  const [x1, y1, x2, y2] = block.bbox;
-  return {
-    left: `${(x1 / page.width) * 100}%`,
-    top: `${(y1 / page.height) * 100}%`,
-    width: `${((x2 - x1) / page.width) * 100}%`,
-    height: `${((y2 - y1) / page.height) * 100}%`,
-  };
-}
-
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    const message = detail ? `${response.status} ${detail.slice(0, 120)}` : `${response.status} ${response.statusText}`;
-    throw new Error(message.trim());
+    throw new Error(detail ? `${response.status} ${detail.slice(0, 160)}` : `${response.status}`);
   }
   return (await response.json()) as T;
 }
@@ -482,13 +470,25 @@ export default function Home() {
   const [customerRef, setCustomerRef] = useState("CBS-1001");
   const [documentType, setDocumentType] = useState<DocumentType>("citizenship");
   const [file, setFile] = useState<File | null>(null);
-  const [aiHealth, setAiHealth] = useState<AiHealth | null>(null);
-  const [manifest, setManifest] = useState<IntegrationManifest | null>(null);
   const [message, setMessage] = useState("Starting");
   const [busy, setBusy] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [exportJson, setExportJson] = useState("");
-  const [profileKeySelection, setProfileKeySelection] = useState("core_banking");
+  const [profileKey, setProfileKey] = useState("cbs_standard");
+  const [aiHealth, setAiHealth] = useState<ResourceState<AiHealth>>(() => emptyResource<AiHealth>());
+  const [platform, setPlatform] = useState<ResourceState<PlatformStatus>>(() => emptyResource<PlatformStatus>());
+  const [operations, setOperations] = useState<ResourceState<OperationsDashboard>>(() =>
+    emptyResource<OperationsDashboard>(),
+  );
+  const [ocrPipeline, setOcrPipeline] = useState<ResourceState<OcrPipelineProfile>>(() =>
+    emptyResource<OcrPipelineProfile>(),
+  );
+  const [templateStudio, setTemplateStudio] = useState<ResourceState<TemplateStudio>>(() =>
+    emptyResource<TemplateStudio>(),
+  );
+  const [profiles, setProfiles] = useState<ResourceState<IntegrationProfilesResponse>>(() =>
+    emptyResource<IntegrationProfilesResponse>(),
+  );
   const [intelligence, setIntelligence] = useState<ResourceState<CaseIntelligence>>(() =>
     emptyResource<CaseIntelligence>(),
   );
@@ -498,61 +498,44 @@ export default function Home() {
   const [classification, setClassification] = useState<ResourceState<ClassificationResponse>>(() =>
     emptyResource<ClassificationResponse>(),
   );
-  const [validationResult, setValidationResult] = useState<ResourceState<ValidationResponse>>(() =>
+  const [validation, setValidation] = useState<ResourceState<ValidationResponse>>(() =>
     emptyResource<ValidationResponse>(),
   );
   const [verification, setVerification] = useState<ResourceState<VerificationResponse>>(() =>
     emptyResource<VerificationResponse>(),
   );
-  const [profiles, setProfiles] = useState<ResourceState<IntegrationProfilesResponse>>(() =>
-    emptyResource<IntegrationProfilesResponse>(),
-  );
-  const [webhookTest, setWebhookTest] = useState<ResourceState<WebhookTestResponse>>(() =>
+  const [webhook, setWebhook] = useState<ResourceState<WebhookTestResponse>>(() =>
     emptyResource<WebhookTestResponse>(),
   );
   const [reviewLink, setReviewLink] = useState<ResourceState<EmbeddedReviewLinkResponse>>(() =>
     emptyResource<EmbeddedReviewLinkResponse>(),
   );
-  const [profileExport, setProfileExport] = useState<ResourceState<unknown>>(() => emptyResource<unknown>());
-  const [tenant, setTenant] = useState<ResourceState<TenantAdminResponse>>(() =>
-    emptyResource<TenantAdminResponse>(),
-  );
-  const [rbac, setRbac] = useState<ResourceState<RbacResponse>>(() => emptyResource<RbacResponse>());
-  const [auditIntegrity, setAuditIntegrity] = useState<ResourceState<AuditIntegrityResponse>>(() =>
-    emptyResource<AuditIntegrityResponse>(),
-  );
-  const [reviewQueue, setReviewQueue] = useState<ResourceState<ReviewQueueResponse>>(() =>
-    emptyResource<ReviewQueueResponse>(),
+  const [profileExport, setProfileExport] = useState<ResourceState<ExportProfileResponse>>(() =>
+    emptyResource<ExportProfileResponse>(),
   );
 
   const selectedCase = useMemo(
     () => cases.find((item) => item.id === selectedId) ?? cases[0] ?? null,
     [cases, selectedId],
   );
-
+  const selectedCaseId = selectedCase?.id ?? null;
   const selectedDocument = selectedCase?.documents[0] ?? null;
   const selectedPage = selectedDocument?.pages[0] ?? null;
-  const configuredProfiles = useMemo(() => normalizeProfiles(profiles.data), [profiles.data]);
-  const visibleProfiles = configuredProfiles.length ? configuredProfiles : defaultIntegrationProfiles;
-  const selectedProfile =
-    visibleProfiles.find((profile) => profileKey(profile) === profileKeySelection) ?? visibleProfiles[0];
-  const queueItems = useMemo(() => {
-    if (!reviewQueue.data) {
-      return [];
-    }
-    return Array.isArray(reviewQueue.data) ? reviewQueue.data : reviewQueue.data.items ?? [];
-  }, [reviewQueue.data]);
-
-  const metrics = useMemo(
-    () => ({
-      cases: cases.length,
-      review: cases.filter((item) => item.status === "review_required").length,
-      approved: cases.filter((item) => item.status === "approved").length,
-      documents: cases.reduce((total, item) => total + item.documents.length, 0),
-      highRisk: cases.filter((item) => item.risk_level?.toLowerCase() === "high").length,
-    }),
-    [cases],
+  const exportProfiles = useMemo(
+    () => profiles.data?.export_profiles ?? ["cbs_standard", "los_loan", "aml_case"],
+    [profiles.data?.export_profiles],
   );
+  const readinessScore = intelligence.data?.readiness_score ?? 0;
+  const validationFindings = validation.data?.findings ?? selectedCase?.validation_findings ?? [];
+  const packetResults = [...packetDocuments(splitPreview.data), ...packetDocuments(classification.data)].slice(0, 6);
+
+  const summaryCounts = operations.data?.counts ?? {
+    total_cases: cases.length,
+    documents: cases.reduce((total, item) => total + item.documents.length, 0),
+    review_required: cases.filter((item) => item.status === "review_required").length,
+    approved: cases.filter((item) => item.status === "approved").length,
+    exceptions: cases.filter((item) => item.risk_level === "high").length,
+  };
 
   const mergeCase = useCallback((updated: KycCase) => {
     setCases((current) => {
@@ -575,47 +558,39 @@ export default function Home() {
     [mergeCase],
   );
 
-  const loadPlatformContext = useCallback(async () => {
+  const loadEnterpriseContext = useCallback(async () => {
+    setPlatform((current) => loadingResource(current));
+    setOperations((current) => loadingResource(current));
+    setOcrPipeline((current) => loadingResource(current));
+    setTemplateStudio((current) => loadingResource(current));
     setProfiles((current) => loadingResource(current));
-    setTenant((current) => loadingResource(current));
-    setRbac((current) => loadingResource(current));
-    setAuditIntegrity((current) => loadingResource(current));
-    setReviewQueue((current) => loadingResource(current));
+    setAiHealth((current) => loadingResource(current));
 
     await Promise.allSettled([
+      apiJson<PlatformStatus>("/api/platform/status", { cache: "no-store" })
+        .then((data) => setPlatform(readyResource(data)))
+        .catch((error) => setPlatform((current) => failedResource(current, error, "Platform status unavailable"))),
+      apiJson<OperationsDashboard>("/api/dashboard/operations", { cache: "no-store" })
+        .then((data) => setOperations(readyResource(data)))
+        .catch((error) =>
+          setOperations((current) => failedResource(current, error, "Operations dashboard unavailable")),
+        ),
+      apiJson<OcrPipelineProfile>("/api/ocr/pipeline", { cache: "no-store" })
+        .then((data) => setOcrPipeline(readyResource(data)))
+        .catch((error) => setOcrPipeline((current) => failedResource(current, error, "OCR pipeline unavailable"))),
+      apiJson<TemplateStudio>("/api/admin/templates/studio", { cache: "no-store" })
+        .then((data) => setTemplateStudio(readyResource(data)))
+        .catch((error) => setTemplateStudio((current) => failedResource(current, error, "Template studio unavailable"))),
       apiJson<IntegrationProfilesResponse>("/api/integrations/profiles", { cache: "no-store" })
         .then((data) => setProfiles(readyResource(data)))
-        .catch((error) =>
-          setProfiles((current) => failedResource(current, error, "Integration profiles unavailable")),
-        ),
-      apiJson<TenantAdminResponse>("/api/admin/tenant", { cache: "no-store" })
-        .then((data) => setTenant(readyResource(data)))
-        .catch((error) => setTenant((current) => failedResource(current, error, "Tenant controls unavailable"))),
-      apiJson<RbacResponse>("/api/admin/rbac", { cache: "no-store" })
-        .then((data) => setRbac(readyResource(data)))
-        .catch((error) => setRbac((current) => failedResource(current, error, "RBAC unavailable"))),
-      apiJson<AuditIntegrityResponse>("/api/admin/audit-integrity", { cache: "no-store" })
-        .then((data) => setAuditIntegrity(readyResource(data)))
-        .catch((error) =>
-          setAuditIntegrity((current) => failedResource(current, error, "Audit integrity unavailable")),
-        ),
-      apiJson<ReviewQueueResponse>("/api/review/queue", { cache: "no-store" })
-        .then((data) => setReviewQueue(readyResource(data)))
-        .catch((error) => setReviewQueue((current) => failedResource(current, error, "Review queue unavailable"))),
+        .catch((error) => setProfiles((current) => failedResource(current, error, "Integration profiles unavailable"))),
+      apiJson<AiHealth>("/api/ai/health", { cache: "no-store" })
+        .then((data) => setAiHealth(readyResource(data)))
+        .catch((error) => setAiHealth((current) => failedResource(current, error, "AI health unavailable"))),
     ]);
   }, []);
 
-  const loadCaseIntelligence = useCallback(async (caseId: string) => {
-    setIntelligence((current) => loadingResource(current));
-    try {
-      const data = await apiJson<CaseIntelligence>(`/api/cases/${caseId}/intelligence`, { cache: "no-store" });
-      setIntelligence(readyResource(data));
-    } catch (error) {
-      setIntelligence((current) => failedResource(current, error, "Checklist intelligence unavailable"));
-    }
-  }, []);
-
-  const refresh = useCallback(async () => {
+  const loadCases = useCallback(async () => {
     setMessage("Syncing");
     try {
       const data = await apiJson<KycCase[]>("/api/cases", { cache: "no-store" });
@@ -625,90 +600,53 @@ export default function Home() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Backend unavailable");
     }
+  }, []);
 
-    const [aiResult, manifestResult] = await Promise.allSettled([
-      apiJson<AiHealth>("/api/ai/health", { cache: "no-store" }),
-      apiJson<IntegrationManifest>("/api/integrations/manifest", { cache: "no-store" }),
-    ]);
-    if (aiResult.status === "fulfilled") {
-      setAiHealth(aiResult.value);
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadCases(), loadEnterpriseContext()]);
+  }, [loadCases, loadEnterpriseContext]);
+
+  const loadCaseIntelligence = useCallback(async (caseId: string) => {
+    setIntelligence((current) => loadingResource(current));
+    try {
+      const data = await apiJson<CaseIntelligence>(`/api/cases/${caseId}/intelligence`, { cache: "no-store" });
+      setIntelligence(readyResource(data));
+    } catch (error) {
+      setIntelligence((current) => failedResource(current, error, "Case intelligence unavailable"));
     }
-    if (manifestResult.status === "fulfilled") {
-      setManifest(manifestResult.value);
-    }
-    void loadPlatformContext();
-  }, [loadPlatformContext]);
+  }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void refresh();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [refresh]);
+    void refreshAll();
+  }, [refreshAll]);
 
   useEffect(() => {
-    if (!visibleProfiles.some((profile) => profileKey(profile) === profileKeySelection)) {
-      setProfileKeySelection(profileKey(visibleProfiles[0]));
-    }
-  }, [profileKeySelection, visibleProfiles]);
-
-  useEffect(() => {
-    const caseId = selectedCase?.id;
-    setSplitPreview(emptyResource<SplitPreviewResponse>());
-    setClassification(emptyResource<ClassificationResponse>());
-    setValidationResult(emptyResource<ValidationResponse>());
-    setVerification(emptyResource<VerificationResponse>());
-    setWebhookTest(emptyResource<WebhookTestResponse>());
-    setReviewLink(emptyResource<EmbeddedReviewLinkResponse>());
-    setProfileExport(emptyResource<unknown>());
-    if (!caseId) {
+    if (!selectedCaseId) {
       setIntelligence(emptyResource<CaseIntelligence>());
       return;
     }
-    void loadCaseIntelligence(caseId);
-  }, [loadCaseIntelligence, selectedCase?.id]);
+    setSplitPreview(emptyResource<SplitPreviewResponse>());
+    setClassification(emptyResource<ClassificationResponse>());
+    setValidation(emptyResource<ValidationResponse>());
+    setVerification(emptyResource<VerificationResponse>());
+    setWebhook(emptyResource<WebhookTestResponse>());
+    setReviewLink(emptyResource<EmbeddedReviewLinkResponse>());
+    setProfileExport(emptyResource<ExportProfileResponse>());
+    void loadCaseIntelligence(selectedCaseId);
+  }, [loadCaseIntelligence, selectedCaseId]);
 
-  async function runCaseEndpoint<T>(
-    actionKey: string,
-    label: string,
-    path: string,
-    setter: Dispatch<SetStateAction<ResourceState<T>>>,
-    body: Record<string, unknown> = {},
-  ) {
-    if (!selectedCase) {
-      return null;
+  useEffect(() => {
+    if (!exportProfiles.includes(profileKey)) {
+      setProfileKey(exportProfiles[0] ?? "cbs_standard");
     }
-    setBusy(true);
-    setActiveAction(actionKey);
-    setMessage(label);
-    setter((current) => loadingResource(current));
-    try {
-      const data = await apiJson<T>(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      setter(readyResource(data));
-      mergeCaseFromPayload(data);
-      void loadPlatformContext();
-      setMessage(`${label} complete`);
-      return data;
-    } catch (error) {
-      setter((current) => failedResource(current, error, `${label} failed`));
-      setMessage(error instanceof Error ? error.message : `${label} failed`);
-      return null;
-    } finally {
-      setBusy(false);
-      setActiveAction(null);
-    }
-  }
+  }, [exportProfiles, profileKey]);
 
   async function createCase(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     setBusy(true);
     setMessage("Creating case");
     try {
-      const response = await fetch(`${API_BASE}/api/cases`, {
+      const created = await apiJson<KycCase>("/api/cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -719,15 +657,9 @@ export default function Home() {
           branch_code: "KTM-001",
         }),
       });
-      if (!response.ok) {
-        throw new Error("Case creation failed");
-      }
-      const created = (await response.json()) as KycCase;
-      setCases((current) => [created, ...current]);
-      setSelectedId(created.id);
-      setExportJson("");
+      mergeCase(created);
       setMessage("Case created");
-      void loadPlatformContext();
+      void loadEnterpriseContext();
       return created;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Case creation failed");
@@ -737,29 +669,26 @@ export default function Home() {
     }
   }
 
-  async function uploadDocument(targetCase: KycCase, uploadFile: File) {
+  async function uploadDocument(targetCase: KycCase, uploadFile: File, typeOverride?: DocumentType) {
     setBusy(true);
     setMessage("Processing document");
     setExportJson("");
     try {
       const form = new FormData();
-      form.append("declared_document_type", documentType);
+      form.append("declared_document_type", typeOverride ?? documentType);
       form.append("file", uploadFile);
-      const response = await fetch(`${API_BASE}/api/cases/${targetCase.id}/documents`, {
+      const updated = await apiJson<KycCase>(`/api/cases/${targetCase.id}/documents`, {
         method: "POST",
         body: form,
       });
-      if (!response.ok) {
-        throw new Error("Document processing failed");
-      }
-      const updated = (await response.json()) as KycCase;
-      setCases((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setSelectedId(updated.id);
+      mergeCase(updated);
       setMessage("Document processed");
       void loadCaseIntelligence(updated.id);
-      void loadPlatformContext();
+      void loadEnterpriseContext();
+      return updated;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Document processing failed");
+      return null;
     } finally {
       setBusy(false);
     }
@@ -774,16 +703,68 @@ export default function Home() {
   }
 
   async function runSamplePacket() {
-    const target = selectedCase ?? (await createCase());
+    let target: KycCase | null = selectedCase;
+    if (!target) {
+      target = await createCase();
+    }
     if (!target) {
       return;
     }
-    const sample = new File(
-      ["Name: Sita Sharma\nCitizenship No: 27-01-78-12345\nMobile: 9841000000"],
-      "nepal-individual-kyc-citizenship.txt",
-      { type: "text/plain" },
-    );
-    await uploadDocument(target, sample);
+    const samples: { type: DocumentType; name: string; text: string }[] = [
+      {
+        type: "citizenship",
+        name: "np-citizenship.txt",
+        text: "Government of Nepal\nName: Sita Sharma\nCitizenship No: 27-01-78-12345\nDistrict: Kathmandu\nPhoto attached\nSignature present",
+      },
+      {
+        type: "account_opening",
+        name: "account-opening-form.txt",
+        text: "Account Opening Form\nCustomer Name: Sita Sharma\nMobile: 9841000000\nAddress: Kathmandu\nAccount Type: Savings\nCustomer Declaration Signed",
+      },
+      {
+        type: "pan",
+        name: "pan-certificate.txt",
+        text: "Permanent Account Number\nName: Sita Sharma\nPAN: 123456789",
+      },
+    ];
+    let currentCase = target;
+    for (const sample of samples) {
+      const fileBlob = new File([sample.text], sample.name, { type: "text/plain" });
+      const updated = await uploadDocument(currentCase, fileBlob, sample.type);
+      if (updated) {
+        currentCase = updated;
+      }
+    }
+  }
+
+  async function runCaseAction<T>(
+    action: string,
+    label: string,
+    path: string,
+    setter: (updater: (current: ResourceState<T>) => ResourceState<T>) => void,
+  ) {
+    if (!selectedCase) {
+      return null;
+    }
+    setBusy(true);
+    setActiveAction(action);
+    setMessage(label);
+    setter((current) => loadingResource(current));
+    try {
+      const data = await apiJson<T>(path, { method: "POST", headers: { "Content-Type": "application/json" } });
+      setter(() => readyResource(data));
+      mergeCaseFromPayload(data);
+      setMessage(`${label} complete`);
+      void loadEnterpriseContext();
+      return data;
+    } catch (error) {
+      setter((current) => failedResource(current, error, `${label} failed`));
+      setMessage(error instanceof Error ? error.message : `${label} failed`);
+      return null;
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
   }
 
   async function approveCase() {
@@ -791,9 +772,10 @@ export default function Home() {
       return;
     }
     setBusy(true);
+    setActiveAction("approve");
     setMessage("Approving");
     try {
-      const response = await fetch(`${API_BASE}/api/cases/${selectedCase.id}/review`, {
+      const updated = await apiJson<KycCase>(`/api/cases/${selectedCase.id}/review`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -803,143 +785,11 @@ export default function Home() {
           note: "Maker-checker review complete.",
         }),
       });
-      if (!response.ok) {
-        throw new Error("Approval failed");
-      }
-      const updated = (await response.json()) as KycCase;
-      setCases((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      mergeCase(updated);
       setMessage("Approved");
-      void loadPlatformContext();
+      void loadEnterpriseContext();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Approval failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function exportCase() {
-    if (!selectedCase) {
-      return;
-    }
-    setBusy(true);
-    setActiveAction("export-json");
-    setMessage("Exporting");
-    try {
-      const response = await fetch(`${API_BASE}/api/cases/${selectedCase.id}/export`);
-      if (!response.ok) {
-        throw new Error("Export failed");
-      }
-      setExportJson(JSON.stringify(await response.json(), null, 2));
-      setMessage("Export ready");
-      void loadPlatformContext();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Export failed");
-    } finally {
-      setBusy(false);
-      setActiveAction(null);
-    }
-  }
-
-  async function runSplitPreview() {
-    if (!selectedCase) {
-      return;
-    }
-    await runCaseEndpoint<SplitPreviewResponse>(
-      "split-preview",
-      "Building split preview",
-      `/api/cases/${selectedCase.id}/split-preview`,
-      setSplitPreview,
-      { profile_key: profileKeySelection },
-    );
-  }
-
-  async function runClassify() {
-    if (!selectedCase) {
-      return;
-    }
-    await runCaseEndpoint<ClassificationResponse>(
-      "classify",
-      "Classifying packet",
-      `/api/cases/${selectedCase.id}/classify`,
-      setClassification,
-      { institution_id: selectedCase.institution_id, branch_code: selectedCase.branch_code ?? "KTM-001" },
-    );
-  }
-
-  async function runValidate() {
-    if (!selectedCase) {
-      return;
-    }
-    await runCaseEndpoint<ValidationResponse>(
-      "validate",
-      "Running validation",
-      `/api/cases/${selectedCase.id}/validate`,
-      setValidationResult,
-      { policy: "nepal_financial_institution_kyc" },
-    );
-  }
-
-  async function runVerification() {
-    if (!selectedCase) {
-      return;
-    }
-    await runCaseEndpoint<VerificationResponse>(
-      "verification",
-      "Running advanced verification",
-      `/api/cases/${selectedCase.id}/verification/run`,
-      setVerification,
-      { profile_key: profileKeySelection, jurisdiction: "NP", branch_code: selectedCase.branch_code ?? "KTM-001" },
-    );
-  }
-
-  async function testWebhook() {
-    setBusy(true);
-    setActiveAction("webhook-test");
-    setMessage("Testing webhook");
-    setWebhookTest((current) => loadingResource(current));
-    try {
-      const data = await apiJson<WebhookTestResponse>("/api/integrations/webhook/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          case_id: selectedCase?.id,
-          profile_key: profileKeySelection,
-          event: "kyc.case.review_required",
-        }),
-      });
-      setWebhookTest(readyResource(data));
-      setMessage("Webhook test complete");
-    } catch (error) {
-      setWebhookTest((current) => failedResource(current, error, "Webhook test failed"));
-      setMessage(error instanceof Error ? error.message : "Webhook test failed");
-    } finally {
-      setBusy(false);
-      setActiveAction(null);
-    }
-  }
-
-  async function createEmbeddedReviewLink() {
-    if (!selectedCase) {
-      return;
-    }
-    setBusy(true);
-    setActiveAction("review-link");
-    setMessage("Creating review link");
-    setReviewLink((current) => loadingResource(current));
-    try {
-      const data = await apiJson<EmbeddedReviewLinkResponse>(
-        `/api/cases/${selectedCase.id}/embedded-review-link`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile_key: profileKeySelection, role: "checker" }),
-        },
-      );
-      setReviewLink(readyResource(data));
-      setMessage("Review link ready");
-    } catch (error) {
-      setReviewLink((current) => failedResource(current, error, "Review link failed"));
-      setMessage(error instanceof Error ? error.message : "Review link failed");
     } finally {
       setBusy(false);
       setActiveAction(null);
@@ -955,13 +805,14 @@ export default function Home() {
     setMessage("Exporting profile");
     setProfileExport((current) => loadingResource(current));
     try {
-      const data = await apiJson<unknown>(
-        `/api/cases/${selectedCase.id}/export-profile/${encodeURIComponent(profileKeySelection)}`,
+      const data = await apiJson<ExportProfileResponse>(
+        `/api/cases/${selectedCase.id}/export-profile/${encodeURIComponent(profileKey)}`,
         { cache: "no-store" },
       );
       setProfileExport(readyResource(data));
       setExportJson(JSON.stringify(data, null, 2));
       setMessage("Export profile ready");
+      void loadEnterpriseContext();
     } catch (error) {
       setProfileExport((current) => failedResource(current, error, "Export profile failed"));
       setMessage(error instanceof Error ? error.message : "Export profile failed");
@@ -971,38 +822,70 @@ export default function Home() {
     }
   }
 
-  const checklistItems = intelligence.data?.checklist ?? [];
-  const policySignals = intelligence.data?.policy_signals ?? [];
-  const splitDocuments = packetDocuments(splitPreview.data);
-  const classifiedDocuments = packetDocuments(classification.data);
-  const validationFindings = validationResult.data?.findings ?? selectedCase?.validation_findings ?? [];
-  const verificationChecks = verification.data?.checks ?? [];
-  const reviewUrl = reviewLink.data?.url ?? reviewLink.data?.review_url ?? "";
-  const selectedProfileStatus = selectedProfile ? profileStatus(selectedProfile) : "not_configured";
-  const reviewCounts = reviewQueue.data && !Array.isArray(reviewQueue.data) ? reviewQueue.data.counts : undefined;
+  async function testWebhook() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("webhook");
+    setMessage("Testing webhook");
+    setWebhook((current) => loadingResource(current));
+    try {
+      const data = await apiJson<WebhookTestResponse>("/api/integrations/webhook/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ case_id: selectedCase.id, event: "case.review_required" }),
+      });
+      setWebhook(readyResource(data));
+      setMessage("Webhook signed");
+    } catch (error) {
+      setWebhook((current) => failedResource(current, error, "Webhook test failed"));
+      setMessage(error instanceof Error ? error.message : "Webhook test failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function createReviewLink() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("review-link");
+    setMessage("Creating review link");
+    setReviewLink((current) => loadingResource(current));
+    try {
+      const data = await apiJson<EmbeddedReviewLinkResponse>(`/api/cases/${selectedCase.id}/embedded-review-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      setReviewLink(readyResource(data));
+      setMessage("Review link ready");
+    } catch (error) {
+      setReviewLink((current) => failedResource(current, error, "Review link failed"));
+      setMessage(error instanceof Error ? error.message : "Review link failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
 
   return (
-    <main className="min-h-screen bg-[#f6f7f8] text-zinc-950">
+    <main className="min-h-screen bg-[#f4f5f4] text-zinc-950">
       <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-[1540px] flex-col gap-4 px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">LipiOCR Enterprise</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal">
-              Nepal FI KYC Command Center
-            </h1>
+        <div className="mx-auto flex max-w-[1680px] flex-col gap-4 px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase text-teal-700">LipiOCR Enterprise</p>
+            <h1 className="mt-1 text-2xl font-semibold">Nepal KYC Operations Cockpit</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 font-medium text-zinc-700">
-              <Activity size={16} />
-              {message}
-            </span>
-            <span className="inline-flex h-9 max-w-full items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 font-medium text-blue-700">
-              <Network size={16} />
-              <span className="truncate">{aiHealth?.model ?? "gemma-4-26b-4bit"}</span>
-            </span>
+            <Pill icon={<Activity size={16} />} label={message} />
+            <Pill icon={<BrainCircuit size={16} />} label={aiHealth.data?.model ?? "gemma-4-26b-4bit"} />
+            <Pill icon={<Route size={16} />} label={platform.data?.deployment_target ?? "on-prem/private"} />
             <button
               className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 font-medium hover:bg-zinc-50"
-              onClick={refresh}
+              onClick={refreshAll}
               type="button"
             >
               <RefreshCcw size={16} />
@@ -1012,51 +895,59 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1540px] gap-4 px-4 py-4 sm:px-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <section className="border-b border-zinc-200 bg-[#fbfbfa]">
+        <div className="mx-auto grid max-w-[1680px] gap-3 px-4 py-4 sm:px-6 lg:grid-cols-5">
+          <Kpi icon={<Boxes size={18} />} label="Cases" value={summaryCounts.total_cases} />
+          <Kpi icon={<ClipboardCheck size={18} />} label="Review" value={summaryCounts.review_required} />
+          <Kpi icon={<ShieldAlert size={18} />} label="Exceptions" value={summaryCounts.exceptions} />
+          <Kpi icon={<BadgeCheck size={18} />} label="Approved" value={summaryCounts.approved} />
+          <Kpi icon={<FileText size={18} />} label="Documents" value={summaryCounts.documents} />
+        </div>
+      </section>
+
+      <div className="mx-auto grid max-w-[1680px] gap-4 px-4 py-4 sm:px-6 2xl:grid-cols-[360px_minmax(0,1fr)_420px]">
         <aside className="space-y-4">
-          <section className="rounded-lg border border-zinc-200 bg-white p-4">
+          <Panel title="Intake" icon={<Upload size={16} />}>
             <form className="space-y-3" onSubmit={createCase}>
-              <div className="grid grid-cols-1 gap-3">
-                <FieldLabel label="Case Type">
-                  <select
-                    className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
-                    value={caseType}
-                    onChange={(event) => setCaseType(event.target.value as CaseType)}
-                  >
-                    {caseTypes.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </FieldLabel>
-                <FieldLabel label="Applicant">
-                  <input
-                    className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none focus:border-teal-600"
-                    value={applicantName}
-                    onChange={(event) => setApplicantName(event.target.value)}
-                  />
-                </FieldLabel>
-                <FieldLabel label="CBS / LOS Ref">
-                  <input
-                    className="h-10 w-full rounded-md border border-zinc-300 px-3 font-mono text-sm outline-none focus:border-teal-600"
-                    value={customerRef}
-                    onChange={(event) => setCustomerRef(event.target.value)}
-                  />
-                </FieldLabel>
-              </div>
+              <FieldLabel label="Case Type">
+                <select
+                  className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                  value={caseType}
+                  onChange={(event) => setCaseType(event.target.value as CaseType)}
+                >
+                  {caseTypes.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </FieldLabel>
+              <FieldLabel label="Applicant">
+                <input
+                  className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none focus:border-teal-600"
+                  value={applicantName}
+                  onChange={(event) => setApplicantName(event.target.value)}
+                />
+              </FieldLabel>
+              <FieldLabel label="CBS / LOS Ref">
+                <input
+                  className="h-10 w-full rounded-md border border-zinc-300 px-3 font-mono text-sm outline-none focus:border-teal-600"
+                  value={customerRef}
+                  onChange={(event) => setCustomerRef(event.target.value)}
+                />
+              </FieldLabel>
               <button
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
                 disabled={busy}
                 type="submit"
               >
-                {busy ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+                {busy && activeAction === null ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
                 Create Case
               </button>
             </form>
-          </section>
+          </Panel>
 
-          <section className="rounded-lg border border-zinc-200 bg-white p-4">
+          <Panel title="Document Intake" icon={<FileCog size={16} />}>
             <form className="space-y-3" onSubmit={handleUpload}>
               <FieldLabel label="Document Type">
                 <select
@@ -1073,177 +964,224 @@ export default function Home() {
               </FieldLabel>
               <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 text-center hover:border-teal-500">
                 <Upload className="mb-2 text-teal-700" size={22} />
-                <span className="max-w-full truncate text-sm font-medium">
-                  {file?.name ?? "Choose document"}
-                </span>
-                <input
-                  className="sr-only"
-                  type="file"
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                />
+                <span className="max-w-full truncate text-sm font-medium">{file?.name ?? "Choose document"}</span>
+                <input className="sr-only" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
               </label>
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-900 px-3 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={busy || !file || !selectedCase}
-                  type="submit"
-                >
-                  <Upload size={16} />
+                <ActionButton disabled={busy || !file || !selectedCase} icon={<Upload size={14} />} type="submit">
                   Upload
-                </button>
-                <button
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={busy}
-                  onClick={runSamplePacket}
-                  type="button"
-                >
-                  <FileText size={16} />
-                  Sample
-                </button>
+                </ActionButton>
+                <ActionButton busy={busy && message.includes("Processing")} icon={<Layers3 size={14} />} onClick={runSamplePacket}>
+                  Full Packet
+                </ActionButton>
               </div>
             </form>
-          </section>
+          </Panel>
 
-          <section className="rounded-lg border border-zinc-200 bg-white">
-            <div className="border-b border-zinc-200 px-4 py-3">
-              <h2 className="text-sm font-semibold">KYC Cases</h2>
-            </div>
-            <div className="max-h-[520px] overflow-auto p-2">
-              {cases.length === 0 ? (
-                <p className="p-3 text-sm text-zinc-500">No cases yet</p>
-              ) : (
-                cases.map((item) => (
+          <Panel title="Work Queue" icon={<Workflow size={16} />}>
+            <div className="space-y-3">
+              <div className="grid gap-2">
+                {(operations.data?.lanes ?? []).map((lane) => (
                   <button
-                    className={`mb-2 block w-full rounded-md border p-3 text-left hover:border-teal-500 ${
-                      selectedCase?.id === item.id
-                        ? "border-teal-600 bg-teal-50"
-                        : "border-zinc-200 bg-white"
-                    }`}
-                    key={item.id}
-                    onClick={() => {
-                      setSelectedId(item.id);
-                      setExportJson("");
-                    }}
+                    className="grid grid-cols-[1fr_auto] gap-2 rounded-md border border-zinc-200 bg-white p-3 text-left hover:border-teal-500"
+                    key={lane.key}
                     type="button"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{item.applicant_name}</p>
-                        <p className="mt-1 truncate font-mono text-xs text-zinc-500">
-                          {item.integration_ref ?? item.id}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-md border px-2 py-1 text-xs font-semibold ${statusClasses[item.status]}`}
-                      >
-                        {labelize(item.status)}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-                      <span>{labelize(item.case_type)}</span>
-                      <span>{item.documents.length} docs</span>
-                    </div>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{lane.label}</span>
+                      <span className="block truncate text-xs text-zinc-500">{lane.description}</span>
+                    </span>
+                    <span className="font-mono text-lg font-semibold">{lane.count}</span>
                   </button>
-                ))
-              )}
+                ))}
+              </div>
+              <div className="max-h-[420px] overflow-auto">
+                {cases.length ? (
+                  cases.map((item) => (
+                    <button
+                      className={`mb-2 block w-full rounded-md border p-3 text-left hover:border-teal-500 ${
+                        selectedCase?.id === item.id ? "border-teal-600 bg-teal-50" : "border-zinc-200 bg-white"
+                      }`}
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedId(item.id);
+                        setExportJson("");
+                      }}
+                      type="button"
+                    >
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold">{item.applicant_name}</span>
+                          <span className="block truncate font-mono text-xs text-zinc-500">
+                            {item.integration_ref ?? compactId(item.id)}
+                          </span>
+                        </span>
+                        <StatusBadge status={item.status} />
+                      </span>
+                      <span className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+                        <span>{labelize(item.case_type)}</span>
+                        <span>{item.documents.length} docs</span>
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-sm text-zinc-500">No active cases</p>
+                )}
+              </div>
             </div>
-          </section>
+          </Panel>
         </aside>
 
         <section className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Metric icon={<Building2 size={18} />} label="Cases" value={metrics.cases} />
-            <Metric icon={<ClipboardCheck size={18} />} label="Review" value={metrics.review} />
-            <Metric icon={<AlertTriangle size={18} />} label="High Risk" value={metrics.highRisk} />
-            <Metric icon={<BadgeCheck size={18} />} label="Approved" value={metrics.approved} />
-            <Metric icon={<FileSearch size={18} />} label="Documents" value={metrics.documents} />
-          </div>
-
-          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.25fr)_minmax(410px,0.75fr)]">
-            <section className="rounded-lg border border-zinc-200 bg-white">
-              <div className="flex flex-col gap-3 border-b border-zinc-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
-                  <h2 className="text-sm font-semibold">
-                    {selectedCase ? selectedCase.applicant_name : "No active case"}
-                  </h2>
-                  <p className="mt-1 truncate font-mono text-xs text-zinc-500">
-                    {selectedCase?.id ?? "Create a case or run the sample packet"}
-                  </p>
+          <Panel title="Platform Readiness" icon={<Gauge size={16} />}>
+            <ResourceError resource={platform} />
+            <div className="grid gap-2 lg:grid-cols-3">
+              {(platform.data?.components ?? []).map((component) => (
+                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3" key={component.key}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{component.label}</p>
+                      <p className="mt-1 truncate text-xs text-zinc-500">{component.detail}</p>
+                    </div>
+                    <StatusBadge status={component.status} />
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-xs text-zinc-600">{component.next_step}</p>
                 </div>
-                {selectedCase ? (
-                  <span
-                    className={`w-fit rounded-md border px-2.5 py-1 text-xs font-semibold ${statusClasses[selectedCase.status]}`}
-                  >
-                    {labelize(selectedCase.status)} · {selectedCase.risk_level.toUpperCase()}
-                  </span>
-                ) : null}
-              </div>
+              ))}
+            </div>
+          </Panel>
 
-              {selectedCase ? (
-                <div className="grid gap-4 p-4 xl:grid-cols-[minmax(360px,0.9fr)_minmax(420px,1.1fr)]">
-                  <div className="space-y-3">
-                    <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
-                      <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-                        <Info label="Type" value={labelize(selectedCase.case_type)} />
-                        <Info label="Institution" value={selectedCase.institution_id} />
-                        <Info label="Branch" value={selectedCase.branch_code ?? "KTM-001"} />
-                        <Info label="Ref" value={selectedCase.integration_ref ?? "None"} />
+          <Panel title={selectedCase?.applicant_name ?? "Case Workbench"} icon={<Eye size={16} />}>
+            {selectedCase ? (
+              <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.95fr)_minmax(420px,1.05fr)]">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <Info label="Case" value={compactId(selectedCase.id)} />
+                    <Info label="Type" value={labelize(selectedCase.case_type)} />
+                    <Info label="Branch" value={selectedCase.branch_code ?? "KTM-001"} />
+                    <Info label="Readiness" value={pct(readinessScore)} />
+                  </div>
+                  <div className="relative aspect-[0.72] overflow-hidden rounded-md border border-zinc-300 bg-[#fbfaf7] shadow-inner">
+                    <div className="absolute inset-x-5 top-5 flex items-start justify-between border-b border-zinc-300 pb-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase text-zinc-500">
+                          {selectedDocument ? labelize(selectedDocument.document_type) : "Document Packet"}
+                        </p>
+                        <p className="mt-1 truncate text-lg font-semibold">
+                          {selectedDocument?.filename ?? "No document uploaded"}
+                        </p>
                       </div>
+                      <FileText className="shrink-0 text-teal-700" size={26} />
                     </div>
+                    {selectedPage ? (
+                      selectedPage.blocks.map((block, index) => (
+                        <div
+                          className="absolute overflow-hidden rounded-sm border border-teal-600 bg-teal-100/70 px-1.5 py-1 text-[10px] font-semibold leading-tight text-teal-950"
+                          key={`${block.text}-${index}`}
+                          style={blockStyle(block, selectedPage)}
+                          title={block.text}
+                        >
+                          <span className="block truncate">{block.text}</span>
+                          <span className="block font-mono">{pct(block.confidence)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="absolute inset-x-6 top-28 text-sm text-zinc-500">No OCR evidence yet.</div>
+                    )}
+                  </div>
+                </div>
 
-                    <div className="relative aspect-[0.72] overflow-hidden rounded-md border border-zinc-300 bg-[#fbfaf7] shadow-inner">
-                      <div className="absolute inset-x-5 top-5 flex items-start justify-between border-b border-zinc-300 pb-3">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                            {selectedDocument ? labelize(selectedDocument.document_type) : "Document Packet"}
-                          </p>
-                          <p className="mt-1 truncate text-lg font-semibold">
-                            {selectedDocument?.filename ?? "No document uploaded"}
-                          </p>
-                        </div>
-                        <FileText className="shrink-0 text-teal-700" size={26} />
-                      </div>
-                      {selectedPage ? (
-                        selectedPage.blocks.map((block, index) => (
-                          <div
-                            className="absolute overflow-hidden rounded-sm border border-teal-600 bg-teal-100/70 px-1.5 py-1 text-[10px] font-semibold leading-tight text-teal-950"
-                            key={`${block.text}-${index}`}
-                            style={blockStyle(block, selectedPage)}
-                            title={block.text}
-                          >
-                            <span className="block truncate">{block.text}</span>
-                            <span className="block font-mono">{pct(block.confidence)}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="absolute inset-x-6 top-28 text-sm text-zinc-500">
-                          Upload a document to see OCR evidence blocks.
-                        </div>
-                      )}
-                    </div>
+                <div className="min-w-0 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ActionButton
+                      busy={activeAction === "split"}
+                      disabled={busy}
+                      icon={<SplitSquareHorizontal size={14} />}
+                      onClick={() =>
+                        runCaseAction<SplitPreviewResponse>(
+                          "split",
+                          "Building split preview",
+                          `/api/cases/${selectedCase.id}/split-preview`,
+                          setSplitPreview,
+                        )
+                      }
+                    >
+                      Split
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "classify"}
+                      disabled={busy}
+                      icon={<FileSearch size={14} />}
+                      onClick={() =>
+                        runCaseAction<ClassificationResponse>(
+                          "classify",
+                          "Classifying packet",
+                          `/api/cases/${selectedCase.id}/classify`,
+                          setClassification,
+                        )
+                      }
+                    >
+                      Classify
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "validate"}
+                      disabled={busy}
+                      icon={<ClipboardCheck size={14} />}
+                      onClick={() =>
+                        runCaseAction<ValidationResponse>(
+                          "validate",
+                          "Running validation",
+                          `/api/cases/${selectedCase.id}/validate`,
+                          setValidation,
+                        )
+                      }
+                    >
+                      Validate
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "verify"}
+                      disabled={busy}
+                      icon={<Play size={14} />}
+                      onClick={() =>
+                        runCaseAction<VerificationResponse>(
+                          "verify",
+                          "Running verification",
+                          `/api/cases/${selectedCase.id}/verification/run`,
+                          setVerification,
+                        )
+                      }
+                      tone="primary"
+                    >
+                      Verify
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "approve"}
+                      disabled={busy}
+                      icon={<ShieldCheck size={14} />}
+                      onClick={approveCase}
+                      tone="primary"
+                    >
+                      Approve
+                    </ActionButton>
                   </div>
 
-                  <div className="min-w-0 overflow-hidden rounded-md border border-zinc-200">
-                    <div className="grid grid-cols-[1fr_92px_120px] border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-zinc-500">
+                  <div className="rounded-md border border-zinc-200">
+                    <div className="grid grid-cols-[1fr_96px_120px] border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold uppercase text-zinc-500">
                       <span>Field</span>
                       <span>Confidence</span>
                       <span>Evidence</span>
                     </div>
-                    <div className="max-h-[650px] overflow-auto">
-                      {selectedCase.extracted_fields.length === 0 ? (
-                        <p className="p-4 text-sm text-zinc-500">No extracted fields yet</p>
-                      ) : (
+                    <div className="max-h-[380px] overflow-auto">
+                      {selectedCase.extracted_fields.length ? (
                         selectedCase.extracted_fields.map((field) => (
                           <div
-                            className="grid gap-2 border-b border-zinc-100 p-3 last:border-b-0 sm:grid-cols-[1fr_92px_120px]"
+                            className="grid gap-2 border-b border-zinc-100 p-3 last:border-b-0 sm:grid-cols-[1fr_96px_120px]"
                             key={`${field.key}-${field.document_id ?? ""}`}
                           >
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-zinc-500">{field.label}</p>
                               <p className="mt-1 truncate text-sm font-medium">{field.value || "Unclear"}</p>
-                              <p className="mt-1 truncate text-xs text-zinc-500">
-                                {field.validation_message}
-                              </p>
+                              <p className="mt-1 truncate text-xs text-zinc-500">{field.validation_message}</p>
                             </div>
                             <div className="flex items-center">
                               <span className="rounded-md bg-zinc-100 px-2 py-1 font-mono text-xs">
@@ -1257,389 +1195,220 @@ export default function Home() {
                             </div>
                           </div>
                         ))
+                      ) : (
+                        <p className="p-4 text-sm text-zinc-500">No extracted fields</p>
                       )}
                     </div>
-                    <div className="flex flex-col gap-2 border-t border-zinc-200 bg-zinc-50 p-3 sm:flex-row sm:justify-end">
-                      <button
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={busy || !selectedCase}
-                        type="button"
-                      >
-                        <Save size={16} />
-                        Save
-                      </button>
-                      <button
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={busy || !selectedCase}
-                        onClick={approveCase}
-                        type="button"
-                      >
-                        {busy ? <Loader2 className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
-                        Approve
-                      </button>
-                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="p-8 text-sm text-zinc-500">Create a case to begin.</div>
-              )}
-            </section>
 
-            <section className="space-y-4">
-              <Panel title="Checklist Intelligence" icon={<Fingerprint size={16} />}>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <Info label="Complete" value={optionalPct(intelligence.data?.completeness_score)} />
-                    <Info label="Risk" value={optionalPct(intelligence.data?.risk_score)} />
-                    <Info
-                      label="Updated"
-                      value={intelligence.updatedAt ? formatDate(intelligence.updatedAt) : intelligence.status}
-                    />
-                  </div>
-                  <ResourceError resource={intelligence} />
-                  <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm leading-relaxed text-zinc-700">
-                    {intelligence.data?.summary ??
-                      (intelligence.status === "loading"
-                        ? "Loading KYC checklist intelligence."
-                        : "Checklist intelligence has not returned for this case.")}
-                  </p>
-                  <div className="max-h-56 space-y-2 overflow-auto pr-1">
-                    {checklistItems.length ? (
-                      checklistItems.map((item, index) => (
-                        <div
-                          className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs"
-                          key={item.id ?? item.key ?? `${item.title ?? item.label}-${index}`}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold">{item.title ?? item.label ?? item.key}</p>
-                            <p className="mt-1 truncate text-zinc-500">{item.message ?? item.evidence ?? "Ready"}</p>
-                          </div>
-                          <StatusBadge status={item.status ?? item.severity} />
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-zinc-500">No checklist items yet</p>
-                    )}
-                  </div>
-                  {policySignals.length ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {policySignals.slice(0, 4).map((signal, index) => (
-                        <div className="min-w-0 rounded-md bg-zinc-50 p-2 text-xs" key={`${signal.key ?? signal.label}-${index}`}>
-                          <p className="truncate font-semibold">{signal.label ?? signal.title ?? signal.key}</p>
-                          <p className="mt-1 truncate text-zinc-500">{signal.message ?? signal.category ?? "Policy signal"}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </Panel>
-
-              <Panel title="Document Packet / Classification" icon={<FileStack size={16} />}>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <ActionButton
-                      busy={activeAction === "split-preview"}
-                      disabled={busy || !selectedCase}
-                      icon={<SplitSquareHorizontal size={14} />}
-                      onClick={runSplitPreview}
-                    >
-                      Split Preview
-                    </ActionButton>
-                    <ActionButton
-                      busy={activeAction === "classify"}
-                      disabled={busy || !selectedCase}
-                      icon={<FileSearch size={14} />}
-                      onClick={runClassify}
-                      tone="primary"
-                    >
-                      Classify
-                    </ActionButton>
-                  </div>
-                  <ResourceError resource={splitPreview} />
-                  <ResourceError resource={classification} />
-                  <div className="space-y-2">
-                    {(selectedCase?.documents ?? []).map((document) => (
-                      <div
-                        className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs"
-                        key={document.id}
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{document.filename}</p>
-                          <p className="mt-1 truncate text-zinc-500">
-                            {labelize(document.declared_document_type)} declared · {document.page_count} pages
-                          </p>
-                        </div>
-                        <StatusBadge status={document.document_type} />
-                      </div>
-                    ))}
-                    {!selectedCase?.documents.length ? <p className="text-sm text-zinc-500">No packet documents yet</p> : null}
-                  </div>
-                  {splitDocuments.length || classifiedDocuments.length ? (
-                    <div className="grid gap-2">
-                      {[...splitDocuments, ...classifiedDocuments].slice(0, 6).map((document, index) => (
-                        <div
-                          className="grid grid-cols-[1fr_72px] gap-3 rounded-md bg-zinc-50 p-2 text-xs"
-                          key={`${document.id ?? document.filename ?? document.document_type}-${index}`}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold">
-                              {labelize(document.document_type ?? document.declared_document_type ?? "unknown")}
-                            </p>
-                            <p className="mt-1 truncate text-zinc-500">
-                              {document.filename ?? document.reason ?? `${document.page_count ?? document.pages?.length ?? 0} pages`}
-                            </p>
-                          </div>
-                          <span className="self-center rounded-md bg-white px-2 py-1 text-center font-mono">
-                            {optionalPct(document.confidence)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </Panel>
-
-              <Panel title="Advanced Verification" icon={<Zap size={16} />}>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <ActionButton
-                      busy={activeAction === "validate"}
-                      disabled={busy || !selectedCase}
-                      icon={<ClipboardCheck size={14} />}
-                      onClick={runValidate}
-                    >
-                      Validate
-                    </ActionButton>
-                    <ActionButton
-                      busy={activeAction === "verification"}
-                      disabled={busy || !selectedCase}
-                      icon={<Play size={14} />}
-                      onClick={runVerification}
-                      tone="primary"
-                    >
-                      Verify
-                    </ActionButton>
-                  </div>
-                  <ResourceError resource={validationResult} />
-                  <ResourceError resource={verification} />
-                  <div className="grid grid-cols-3 gap-2">
-                    <Info label="Decision" value={verification.data?.decision ?? validationResult.data?.status ?? "pending"} />
-                    <Info label="Score" value={optionalPct(verification.data?.score)} />
-                    <Info label="Run" value={verification.data?.run_id ? compactId(verification.data.run_id) : "none"} />
-                  </div>
-                  <div className="max-h-52 space-y-2 overflow-auto pr-1">
-                    {validationFindings.length ? (
-                      validationFindings.map((finding, index) => (
-                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={`${finding.code}-${index}`}>
+                  {packetResults.length ? (
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {packetResults.map((document, index) => (
+                        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs" key={`${document.document_id}-${index}`}>
                           <div className="flex items-start justify-between gap-2">
-                            <p className="min-w-0 truncate font-semibold text-amber-900">{finding.code}</p>
-                            <StatusBadge status={finding.severity} />
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold">
+                                {labelize(document.predicted_type ?? document.document_type)}
+                              </p>
+                              <p className="mt-1 truncate text-zinc-500">{document.filename ?? document.reason}</p>
+                            </div>
+                            <span className="font-mono">{pct(document.confidence)}</span>
                           </div>
-                          <p className="mt-1 truncate text-amber-800">{finding.message}</p>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-zinc-500">No validation findings yet</p>
-                    )}
-                    {verificationChecks.map((check, index) => (
-                      <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={`${check.key ?? check.label}-${index}`}>
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{check.label ?? check.title ?? check.key}</p>
-                          <p className="mt-1 truncate text-zinc-500">{check.message ?? check.evidence ?? "Verification check"}</p>
-                        </div>
-                        <StatusBadge status={check.status ?? check.severity} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Panel>
-
-              <Panel title="Integrations" icon={<Plug size={16} />}>
-                <div className="space-y-3">
-                  <ResourceError resource={profiles} />
-                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                    <select
-                      className="h-9 min-w-0 rounded-md border border-zinc-300 bg-white px-2 text-xs font-semibold outline-none focus:border-teal-600"
-                      value={profileKeySelection}
-                      onChange={(event) => setProfileKeySelection(event.target.value)}
-                    >
-                      {visibleProfiles.map((profile) => (
-                        <option key={profileKey(profile)} value={profileKey(profile)}>
-                          {profileName(profile)}
-                        </option>
                       ))}
-                    </select>
-                    <StatusBadge status={selectedProfileStatus} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Info label="Modes" value={manifest?.modes.slice(0, 3).join(", ") ?? "loading"} />
-                    <Info label="Events" value={manifest?.events.slice(0, 3).join(", ") ?? "loading"} />
-                  </div>
-                  <div className="max-h-48 space-y-2 overflow-auto pr-1">
-                    {visibleProfiles.map((profile) => (
-                      <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={profileKey(profile)}>
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{profileName(profile)}</p>
-                          <p className="mt-1 truncate text-zinc-500">
-                            {profile.category ?? profile.mode ?? "External adapter"} · {profile.destination ?? "Nepal FI channel"}
-                          </p>
-                        </div>
-                        <StatusBadge status={profileStatus(profile)} />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <ActionButton
-                      busy={activeAction === "webhook-test"}
-                      disabled={busy}
-                      icon={<Network size={14} />}
-                      onClick={testWebhook}
-                    >
-                      Webhook
-                    </ActionButton>
-                    <ActionButton
-                      busy={activeAction === "review-link"}
-                      disabled={busy || !selectedCase}
-                      icon={<Link2 size={14} />}
-                      onClick={createEmbeddedReviewLink}
-                    >
-                      Review Link
-                    </ActionButton>
-                    <ActionButton
-                      busy={activeAction === "export-profile"}
-                      disabled={busy || !selectedCase}
-                      icon={<Download size={14} />}
-                      onClick={exportProfile}
-                      tone="primary"
-                    >
-                      Export
-                    </ActionButton>
-                  </div>
-                  <ResourceError resource={webhookTest} />
-                  <ResourceError resource={reviewLink} />
-                  <ResourceError resource={profileExport} />
-                  {webhookTest.data ? (
-                    <div className="rounded-md bg-zinc-50 p-2 text-xs">
-                      <span className="font-semibold">{webhookTest.data.status ?? "webhook_result"}</span>
-                      <span className="ml-2 font-mono text-zinc-500">{webhookTest.data.event_id ?? webhookTest.data.message}</span>
-                    </div>
-                  ) : null}
-                  {reviewUrl ? (
-                    <div className="rounded-md bg-zinc-950 p-2 font-mono text-xs text-zinc-50">
-                      <p className="truncate">{reviewUrl}</p>
-                      <p className="mt-1 text-zinc-400">{reviewLink.data?.expires_at ?? "no expiry returned"}</p>
                     </div>
                   ) : null}
                 </div>
-              </Panel>
+              </div>
+            ) : (
+              <div className="p-8 text-sm text-zinc-500">Create or select a case.</div>
+            )}
+          </Panel>
 
-              <Panel title="Enterprise Controls" icon={<KeyRound size={16} />}>
-                <div className="space-y-3">
-                  <ResourceError resource={tenant} />
-                  <ResourceError resource={rbac} />
-                  <ResourceError resource={auditIntegrity} />
-                  <ResourceError resource={reviewQueue} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Info label="Tenant" value={tenant.data?.institution_name ?? tenant.data?.tenant_key ?? "Nepal FI demo"} />
-                    <Info label="Residency" value={tenant.data?.data_residency ?? "NP"} />
-                    <Info label="RBAC Users" value={`${rbac.data?.active_users ?? 0}`} />
-                    <Info label="Retention" value={tenant.data?.retention_days ? `${tenant.data.retention_days} days` : "policy"} />
-                  </div>
-                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs">
+          <Panel title="Production Pipeline" icon={<SearchCheck size={16} />}>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-2">
+                <SectionLabel icon={<FileSearch size={15} />} label={`OCR: ${ocrPipeline.data?.active_provider ?? "loading"}`} />
+                {(ocrPipeline.data?.providers ?? []).map((provider) => (
+                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={provider.key}>
                     <div className="min-w-0">
-                      <p className="truncate font-semibold">Maker-checker controls</p>
+                      <p className="truncate font-semibold">{provider.label}</p>
+                      <p className="mt-1 truncate text-zinc-500">{provider.best_for}</p>
+                    </div>
+                    <StatusBadge status={provider.status} />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <SectionLabel icon={<FileCog size={15} />} label="Template Studio" />
+                {(templateStudio.data?.templates ?? []).slice(0, 6).map((template) => (
+                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={template.document_type}>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{template.name}</p>
                       <p className="mt-1 truncate text-zinc-500">
-                        {(rbac.data?.roles ?? []).map((role) => role.name).filter(Boolean).slice(0, 3).join(", ") || "Roles pending"}
+                        {template.field_count} fields · {labelize(template.mode)}
                       </p>
                     </div>
-                    <StatusBadge status={rbac.data?.maker_checker ? "configured" : "not_configured"} />
+                    <StatusBadge status={template.status} />
                   </div>
-                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">Audit integrity ledger</p>
-                      <p className="mt-1 truncate font-mono text-zinc-500">
-                        {auditIntegrity.data?.ledger_head ? compactId(auditIntegrity.data.ledger_head) : "ledger pending"}
-                      </p>
-                    </div>
-                    <StatusBadge status={auditIntegrity.data?.status ?? "unknown"} />
-                  </div>
-                  {reviewCounts ? (
-                    <div className="grid grid-cols-3 gap-2">
-                      {Object.entries(reviewCounts)
-                        .slice(0, 3)
-                        .map(([key, value]) => (
-                          <div className="rounded-md bg-zinc-50 p-2 text-xs" key={key}>
-                            <p className="truncate font-semibold">{labelize(key)}</p>
-                            <p className="mt-1 font-mono text-lg">{value}</p>
-                          </div>
-                        ))}
-                    </div>
-                  ) : null}
-                  <div className="max-h-36 space-y-2 overflow-auto pr-1">
-                    {queueItems.slice(0, 4).map((item) => (
-                      <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md bg-zinc-50 p-2 text-xs" key={item.case_id ?? item.applicant_name}>
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{item.applicant_name ?? item.case_id}</p>
-                          <p className="mt-1 truncate text-zinc-500">{item.age_minutes ?? 0} min · {item.risk_level ?? "risk pending"}</p>
-                        </div>
-                        <StatusBadge status={item.status} />
-                      </div>
-                    ))}
-                    {!queueItems.length ? <p className="text-sm text-zinc-500">No queue items returned</p> : null}
-                  </div>
-                  {selectedCase?.audit_events.length ? (
-                    <ol className="space-y-2 border-t border-zinc-200 pt-3">
-                      {selectedCase.audit_events.slice(0, 4).map((event, index) => (
-                        <li className="grid grid-cols-[82px_1fr] gap-3 text-xs" key={`${event.action}-${index}`}>
-                          <span className="font-mono text-zinc-500">{formatDate(event.created_at)}</span>
-                          <span className="min-w-0">
-                            <span className="block truncate font-semibold">{event.action}</span>
-                            <span className="block truncate text-zinc-500">{event.actor}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                </div>
-              </Panel>
-
-              <Panel
-                title="Export Payload"
-                icon={
-                  <ActionButton
-                    busy={activeAction === "export-json"}
-                    disabled={busy || !selectedCase}
-                    icon={<Download size={14} />}
-                    onClick={exportCase}
-                  >
-                    JSON
-                  </ActionButton>
-                }
-              >
-                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-zinc-50">
-                  {exportJson || "{ }"}
-                </pre>
-              </Panel>
-            </section>
-          </div>
+                ))}
+              </div>
+            </div>
+          </Panel>
         </section>
+
+        <aside className="space-y-4">
+          <Panel title="Decision Rail" icon={<Fingerprint size={16} />}>
+            <ResourceError resource={intelligence} />
+            <div className="grid grid-cols-3 gap-2">
+              <Info label="Ready" value={pct(readinessScore)} />
+              <Info label="Risk" value={pct(intelligence.data?.risk_score)} />
+              <Info label="Gaps" value={`${intelligence.data?.gaps.length ?? 0}`} />
+            </div>
+            <div className="mt-3 space-y-2">
+              {(intelligence.data?.checklist ?? []).map((item) => (
+                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={item.key}>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{item.label}</p>
+                    <p className="mt-1 truncate text-zinc-500">{item.message}</p>
+                  </div>
+                  <StatusBadge status={item.status} />
+                </div>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel title="Verification" icon={<LockKeyhole size={16} />}>
+            <div className="grid grid-cols-3 gap-2">
+              <Info label="Decision" value={verification.data?.decision ?? "pending"} />
+              <Info label="Score" value={pct(verification.data?.score)} />
+              <Info label="Run" value={compactId(verification.data?.run_id)} />
+            </div>
+            <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+              {validationFindings.map((finding, index) => (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={`${finding.code}-${index}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate font-semibold text-amber-900">{finding.code}</p>
+                    <StatusBadge status={finding.severity} />
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-amber-800">{finding.message}</p>
+                </div>
+              ))}
+              {(verification.data?.checks ?? []).map((check) => (
+                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={check.key}>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{check.label}</p>
+                    <p className="mt-1 line-clamp-2 text-zinc-500">{check.message}</p>
+                  </div>
+                  <StatusBadge status={check.status} />
+                </div>
+              ))}
+              {!validationFindings.length && !verification.data?.checks.length ? (
+                <p className="text-sm text-zinc-500">No validation or verification output</p>
+              ) : null}
+            </div>
+          </Panel>
+
+          <Panel title="Integration Handoff" icon={<Plug size={16} />}>
+            <div className="space-y-3">
+              <FieldLabel label="Export Profile">
+                <select
+                  className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                  value={profileKey}
+                  onChange={(event) => setProfileKey(event.target.value)}
+                >
+                  {exportProfiles.map((key) => (
+                    <option key={key} value={key}>
+                      {labelize(key)}
+                    </option>
+                  ))}
+                </select>
+              </FieldLabel>
+              <div className="grid grid-cols-3 gap-2">
+                <ActionButton
+                  busy={activeAction === "webhook"}
+                  disabled={busy || !selectedCase}
+                  icon={<Network size={14} />}
+                  onClick={testWebhook}
+                >
+                  Webhook
+                </ActionButton>
+                <ActionButton
+                  busy={activeAction === "review-link"}
+                  disabled={busy || !selectedCase}
+                  icon={<Link2 size={14} />}
+                  onClick={createReviewLink}
+                >
+                  Link
+                </ActionButton>
+                <ActionButton
+                  busy={activeAction === "export-profile"}
+                  disabled={busy || !selectedCase}
+                  icon={<Download size={14} />}
+                  onClick={exportProfile}
+                  tone="primary"
+                >
+                  Export
+                </ActionButton>
+              </div>
+              <ResourceError resource={webhook} />
+              <ResourceError resource={reviewLink} />
+              <ResourceError resource={profileExport} />
+              {webhook.data ? (
+                <InfoBox label="Webhook" value={`${webhook.data.status} · ${compactId(webhook.data.event_id)}`} />
+              ) : null}
+              {reviewLink.data ? <InfoBox label="Review Link" value={reviewLink.data.url} /> : null}
+            </div>
+          </Panel>
+
+          <Panel title="Export Payload" icon={<Database size={16} />}>
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-zinc-50">
+              {exportJson || "{ }"}
+            </pre>
+          </Panel>
+
+          <Panel title="Audit" icon={<History size={16} />}>
+            <ol className="space-y-2">
+              {(selectedCase?.audit_events ?? []).slice(0, 8).map((event, index) => (
+                <li className="grid grid-cols-[86px_1fr] gap-3 text-xs" key={`${event.action}-${index}`}>
+                  <span className="font-mono text-zinc-500">{formatDate(event.created_at)}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{event.action}</span>
+                    <span className="block truncate text-zinc-500">{event.actor}</span>
+                  </span>
+                </li>
+              ))}
+              {!selectedCase?.audit_events.length ? <p className="text-sm text-zinc-500">No audit events</p> : null}
+            </ol>
+          </Panel>
+        </aside>
       </div>
     </main>
   );
 }
 
-function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
+function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <section className="rounded-lg border border-zinc-200 bg-white">
+      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <span className="text-zinc-500">{icon}</span>
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+function FieldLabel({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
-        {label}
-      </span>
+      <span className="mb-2 block text-xs font-semibold uppercase text-zinc-500">{label}</span>
       {children}
     </label>
   );
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function Kpi({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4">
       <div className="flex items-center justify-between">
@@ -1651,11 +1420,38 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   );
 }
 
+function Pill({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <span className="inline-flex h-9 max-w-full items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 font-medium text-zinc-700">
+      <span className="shrink-0 text-teal-700">{icon}</span>
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0">
-      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-zinc-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium text-zinc-900">{value}</p>
+    <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-zinc-900">{value}</p>
+    </div>
+  );
+}
+
+function InfoBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md bg-zinc-50 p-3 text-xs">
+      <p className="font-semibold">{label}</p>
+      <p className="mt-1 truncate font-mono text-zinc-500">{value}</p>
+    </div>
+  );
+}
+
+function SectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+      <span className="text-teal-700">{icon}</span>
+      {label}
     </div>
   );
 }
@@ -1663,7 +1459,7 @@ function Info({ label, value }: { label: string; value: string }) {
 function StatusBadge({ status }: { status?: string }) {
   return (
     <span className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 text-xs font-semibold ${statusTone(status)}`}>
-      <span className="truncate">{labelize(status ?? "unknown")}</span>
+      <span className="truncate">{labelize(status)}</span>
     </span>
   );
 }
@@ -1673,7 +1469,7 @@ function ResourceError<T>({ resource }: { resource: ResourceState<T> }) {
     return null;
   }
   return (
-    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+    <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
       <AlertTriangle className="mt-0.5 shrink-0" size={14} />
       <p className="min-w-0 break-words">{resource.error}</p>
     </div>
@@ -1688,8 +1484,8 @@ function ActionButton({
   ...props
 }: {
   busy?: boolean;
-  children: React.ReactNode;
-  icon: React.ReactNode;
+  children: ReactNode;
+  icon: ReactNode;
   tone?: "primary" | "secondary";
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const toneClass =
@@ -1708,25 +1504,5 @@ function ActionButton({
       {busy ? <Loader2 className="shrink-0 animate-spin" size={14} /> : <span className="shrink-0">{icon}</span>}
       <span className="truncate">{children}</span>
     </button>
-  );
-}
-
-function Panel({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-zinc-200 bg-white">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <span className="text-zinc-500">{icon}</span>
-      </div>
-      <div className="p-4">{children}</div>
-    </div>
   );
 }
