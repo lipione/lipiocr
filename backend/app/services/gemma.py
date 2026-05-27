@@ -126,6 +126,8 @@ class GemmaReasoningClient:
             "model": self.settings.gemma_model,
             "api_base": self.settings.gemma_api_base,
             "enabled": self.settings.gemma_enabled,
+            "strict_json": self.settings.gemma_require_json,
+            "retries": self.settings.gemma_retries,
         }
 
     async def extract(
@@ -138,7 +140,7 @@ class GemmaReasoningClient:
         if not self.settings.gemma_enabled:
             return None
 
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.settings.gemma_model,
             "messages": build_extraction_messages(
                 case_type=case_type,
@@ -146,13 +148,24 @@ class GemmaReasoningClient:
                 pages=pages,
             ),
             "temperature": 0,
-            "max_tokens": 900,
+            "max_tokens": self.settings.gemma_max_tokens,
         }
-        async with httpx.AsyncClient(timeout=self.settings.gemma_timeout_seconds) as client:
-            response = await client.post(
-                f"{self.settings.gemma_api_base.rstrip('/')}/chat/completions",
-                json=payload,
-            )
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-            return parse_gemma_extraction(content)
+        if self.settings.gemma_require_json:
+            payload["response_format"] = {"type": "json_object"}
+
+        last_error: Exception | None = None
+        for _attempt in range(max(1, self.settings.gemma_retries + 1)):
+            try:
+                async with httpx.AsyncClient(timeout=self.settings.gemma_timeout_seconds) as client:
+                    response = await client.post(
+                        f"{self.settings.gemma_api_base.rstrip('/')}/chat/completions",
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    content = response.json()["choices"][0]["message"]["content"]
+                    return parse_gemma_extraction(content)
+            except Exception as exc:
+                last_error = exc
+        if last_error:
+            raise last_error
+        return None

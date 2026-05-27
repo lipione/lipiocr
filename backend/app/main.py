@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
-from fastapi import Body, FastAPI, File, Form, UploadFile
+from fastapi import Body, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -22,6 +22,8 @@ from app.services.extraction import extract_fields
 from app.services.gemma import GemmaReasoningClient
 from app.services.ocr import get_ocr_provider
 from app.services.repository import repository
+from app.services.security import require_permission
+from app.services.storage import build_storage
 from app.services.templates import get_template, list_templates
 from app.services.validation import compute_overall_confidence, route_by_confidence, validate_field
 
@@ -32,6 +34,7 @@ UPLOAD_DIR = Path(settings.upload_dir)
 if not UPLOAD_DIR.is_absolute():
     UPLOAD_DIR = BASE_DIR / UPLOAD_DIR
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+object_storage = build_storage(settings)
 
 app = FastAPI(title="LipiOCR Enterprise API", version="0.2.0")
 app.add_middleware(
@@ -91,9 +94,10 @@ def integration_profiles():
 
 
 @app.post("/api/integrations/webhook/test")
-def integration_webhook_test(request: Dict[str, object] = Body(default_factory=dict)):
+def integration_webhook_test(http_request: Request, request: Dict[str, object] = Body(default_factory=dict)):
     from app.services.integrations import build_webhook_test_payload
 
+    require_permission(settings, http_request, "export_case")
     case_id = str(request.get("case_id", ""))
     event = str(request.get("event", "case.approved"))
     case = repository.get_case(case_id)
@@ -157,7 +161,8 @@ def template_studio():
 
 
 @app.post("/api/cases", status_code=201)
-def create_case(request: CaseCreateRequest):
+def create_case(http_request: Request, request: CaseCreateRequest):
+    require_permission(settings, http_request, "create_case")
     case = KycCase(
         case_type=request.case_type,
         applicant_name=request.applicant_name,
@@ -201,9 +206,10 @@ def case_split_preview(case_id: str):
 
 
 @app.post("/api/cases/{case_id}/classify")
-def classify_case(case_id: str):
+def classify_case(case_id: str, http_request: Request):
     from app.services.kyc_intelligence import classify_case_documents
 
+    require_permission(settings, http_request, "submit_review")
     case = repository.get_case(case_id)
     result = classify_case_documents(case)
     repository.save_case(case)
@@ -211,9 +217,10 @@ def classify_case(case_id: str):
 
 
 @app.post("/api/cases/{case_id}/validate")
-def validate_case(case_id: str):
+def validate_case(case_id: str, http_request: Request):
     from app.services.kyc_intelligence import validate_case_consistency
 
+    require_permission(settings, http_request, "submit_review")
     case = repository.get_case(case_id)
     result = validate_case_consistency(case)
     repository.save_case(case)
@@ -221,23 +228,26 @@ def validate_case(case_id: str):
 
 
 @app.post("/api/cases/{case_id}/embedded-review-link")
-def embedded_review_link(case_id: str):
+def embedded_review_link(case_id: str, http_request: Request):
     from app.services.integrations import build_embedded_review_link
 
+    require_permission(settings, http_request, "export_case")
     return build_embedded_review_link(repository.get_case(case_id), settings)
 
 
 @app.get("/api/cases/{case_id}/export-profile/{profile_key}")
-def export_profile(case_id: str, profile_key: str):
+def export_profile(case_id: str, profile_key: str, http_request: Request):
     from app.services.integrations import build_export_profile
 
+    require_permission(settings, http_request, "export_case")
     return build_export_profile(repository.get_case(case_id), profile_key)
 
 
 @app.post("/api/cases/{case_id}/verification/run")
-def verification_run(case_id: str):
+def verification_run(case_id: str, http_request: Request):
     from app.services.advanced_verification import run_verification
 
+    require_permission(settings, http_request, "submit_review")
     case = repository.get_case(case_id)
     result = run_verification(case, repository.list_cases())
     repository.save_case(case)
@@ -246,14 +256,22 @@ def verification_run(case_id: str):
 
 @app.post("/api/cases/{case_id}/documents", status_code=201)
 async def upload_case_document(
+    http_request: Request,
     case_id: str,
     declared_document_type: DocumentType = Form(DocumentType.unknown),
     file: UploadFile = File(...),
 ):
+    require_permission(settings, http_request, "upload_document")
     case = repository.get_case(case_id)
     contents = await file.read()
     stored_path = UPLOAD_DIR / f"{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}-{file.filename}"
     stored_path.write_bytes(contents)
+    storage_metadata = object_storage.put_upload(
+        case_id=case.id,
+        filename=file.filename or stored_path.name,
+        content=contents,
+        content_type=file.content_type or "application/octet-stream",
+    )
 
     case.status = CaseStatus.processing
     case.audit_events.append(
@@ -261,7 +279,11 @@ async def upload_case_document(
             action="document_uploaded",
             actor="uploader",
             note=file.filename or stored_path.name,
-            metadata={"stored_path": stored_path.name, "declared_document_type": declared_document_type.value},
+            metadata={
+                "stored_path": stored_path.name,
+                "declared_document_type": declared_document_type.value,
+                "storage": storage_metadata,
+            },
         )
     )
 
@@ -271,6 +293,8 @@ async def upload_case_document(
         content=contents,
         declared_document_type=declared_document_type,
         gemma_client=_gemma_client(),
+        source_path=stored_path,
+        ocr_provider=get_ocr_provider(settings.ocr_provider),
     )
     case.documents.append(document)
     case.extracted_fields.extend(fields)
@@ -288,7 +312,9 @@ async def upload_case_document(
 
 
 @app.patch("/api/cases/{case_id}/review")
-def review_case(case_id: str, review: ReviewRequest):
+def review_case(case_id: str, review: ReviewRequest, http_request: Request):
+    permission = "approve_case" if review.decision == "approve" else "review_case"
+    require_permission(settings, http_request, permission)
     case = repository.get_case(case_id)
 
     fields_by_key = {field.key: field for field in case.extracted_fields}
@@ -337,7 +363,8 @@ def review_case(case_id: str, review: ReviewRequest):
 
 
 @app.get("/api/cases/{case_id}/export")
-def export_case(case_id: str):
+def export_case(case_id: str, http_request: Request):
+    require_permission(settings, http_request, "export_case")
     case = repository.get_case(case_id)
     case.audit_events.append(AuditEvent(action="export_generated", actor="api", note="JSON export generated"))
     repository.save_case(case)
@@ -366,9 +393,11 @@ def templates():
 
 @app.post("/api/documents/upload", status_code=201)
 async def upload_document(
+    http_request: Request,
     document_type: DocumentType = Form(...),
     file: UploadFile = File(...),
 ):
+    require_permission(settings, http_request, "upload_document")
     stored_path = UPLOAD_DIR / f"{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}-{file.filename}"
     contents = await file.read()
     stored_path.write_bytes(contents)

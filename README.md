@@ -119,7 +119,28 @@ On the remote server, use the existing vLLM endpoint:
 LIPIOCR_GEMMA_ENABLED=true
 LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8003/v1
 LIPIOCR_GEMMA_MODEL=gemma-4-26b-4bit
+LIPIOCR_GEMMA_RETRIES=2
+LIPIOCR_GEMMA_REQUIRE_JSON=true
 ```
+
+## Production Foundations
+
+LipiOCR now supports production-shaped foundations behind environment flags:
+
+- PostgreSQL-capable repository via `LIPIOCR_REPOSITORY_BACKEND=sql` and `DATABASE_URL`.
+- MinIO/S3 document storage via `LIPIOCR_STORAGE_BACKEND=s3`, `S3_ENDPOINT_URL`, and `S3_BUCKET`.
+- OCR provider selection via `LIPIOCR_OCR_PROVIDER=mock|tesseract|paddleocr`.
+- Gemma 4 strict JSON extraction with retry/timeout controls.
+- API-key RBAC enforcement via `LIPIOCR_API_AUTH_ENABLED=true` and `LIPIOCR_API_KEYS=key:role,key2:role2`.
+
+Local development keeps `memory`, `local`, `mock`, and auth-disabled defaults so the app runs without infrastructure. The Docker Compose profile defaults to SQL repository and MinIO/S3 storage.
+
+API-key roles:
+
+- `maker`: create cases, upload documents, classify/validate/verify.
+- `checker`: review, approve/reject, export, webhook/review-link handoff.
+- `auditor`: read/audit-oriented role for the next reporting phase.
+- `admin`: all permissions.
 
 ## Docker Deployment
 

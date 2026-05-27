@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Iterable
 
-from app.models import CaseStatus, KycCase, ValidationFinding
+from app.models import CaseStatus, KycCase
 from app.services.integrations import list_integration_profiles
 from app.services.templates import list_templates
 
@@ -21,7 +20,7 @@ def _component(key: str, label: str, status: str, detail: str, next_step: str) -
 
 
 def build_ocr_pipeline_profile(settings) -> dict[str, object]:
-    active_provider = os.getenv("LIPIOCR_OCR_PROVIDER", "mock")
+    active_provider = settings.ocr_provider
     providers = [
         {
             "key": "mock",
@@ -72,9 +71,14 @@ def build_ocr_pipeline_profile(settings) -> dict[str, object]:
 
 def build_platform_status(settings, cases: Iterable[KycCase]) -> dict[str, object]:
     case_list = list(cases)
-    database_url = os.getenv("DATABASE_URL", "")
-    s3_endpoint = os.getenv("S3_ENDPOINT_URL", "")
-    active_provider = os.getenv("LIPIOCR_OCR_PROVIDER", "mock")
+    database_url = settings.database_url
+    storage_backend = settings.storage_backend
+    if storage_backend == "auto":
+        storage_backend = "s3" if settings.s3_endpoint_url else "local"
+    repository_backend = settings.repository_backend
+    if repository_backend == "auto":
+        repository_backend = "sql" if settings.database_url else "memory"
+    active_provider = settings.ocr_provider
     integration_profiles = list_integration_profiles()["profiles"]
     configured_integrations = sum(1 for profile in integration_profiles if profile["status"] == "configured")
 
@@ -96,23 +100,23 @@ def build_platform_status(settings, cases: Iterable[KycCase]) -> dict[str, objec
         _component(
             "persistence",
             "Case persistence",
-            "configured" if database_url.startswith("postgresql://") else "partial",
-            "PostgreSQL URL configured" if database_url else "Local API uses in-memory repository",
-            "Replace demo repository with PostgreSQL migrations and durable case storage",
+            "configured" if repository_backend == "sql" and database_url else "partial",
+            "SQL repository active" if repository_backend == "sql" and database_url else "Local API uses in-memory repository",
+            "Run SQL repository against managed PostgreSQL and add schema migrations",
         ),
         _component(
             "object_storage",
             "Document object storage",
-            "configured" if s3_endpoint else "partial",
-            s3_endpoint or "Local uploads folder is active",
-            "Store source files, crops, and exports in MinIO/S3 with retention policy",
+            "configured" if storage_backend == "s3" else "partial",
+            settings.s3_endpoint_url if storage_backend == "s3" else "Local upload/object store is active",
+            "Use MinIO/S3 for source files, crops, and exports with retention policy",
         ),
         _component(
             "security",
             "Security and tenant controls",
-            "not_configured",
-            "RBAC policy is modeled; authentication/SSO enforcement is not yet wired",
-            "Add OIDC/SSO, API keys, tenant isolation, and encrypted secrets",
+            "configured" if settings.api_auth_enabled else "partial",
+            "API-key RBAC enforcement enabled" if settings.api_auth_enabled else "API-key RBAC is available but disabled for local development",
+            "Add OIDC/SSO and tenant identity provider integration after API-key pilot",
         ),
         _component(
             "integrations",
@@ -131,9 +135,9 @@ def build_platform_status(settings, cases: Iterable[KycCase]) -> dict[str, objec
         "case_count": len(case_list),
         "components": components,
         "next_actions": [
-            "Wire PostgreSQL repository and MinIO-backed document storage",
+            "Run PostgreSQL repository and MinIO-backed document storage in production compose",
             "Install production OCR providers and evaluate Nepali document accuracy",
-            "Enable SSO/API key enforcement before financial-institution pilot data",
+            "Enable API-key or SSO enforcement before financial-institution pilot data",
             "Configure live registry, AML, liveness, and CBS/LOS adapters per institution",
         ],
     }

@@ -1,4 +1,5 @@
-from typing import Iterable, List
+from pathlib import Path
+from typing import Iterable, List, Optional
 
 from app.models import (
     CaseType,
@@ -16,29 +17,57 @@ from app.services.gemma import GemmaExtractionResult, GemmaReasoningClient
 from app.services.validation import validate_field
 
 
-def build_pages_from_upload(content: bytes, filename: str) -> List[OcrPage]:
-    try:
-        text = content.decode("utf-8").strip()
-    except UnicodeDecodeError:
-        text = ""
-
-    if not text:
-        text = f"Uploaded scanned document: {filename}. Full OCR pending for binary page image."
+def _pages_from_text_lines(lines: List[tuple[str, float]], filename: str) -> List[OcrPage]:
+    if not lines:
+        lines = [(f"Uploaded scanned document: {filename}. Full OCR pending for binary page image.", 0.40)]
 
     blocks: List[OcrBlock] = []
-    for index, line in enumerate([line.strip() for line in text.splitlines() if line.strip()] or [text], start=1):
+    for index, (line, confidence) in enumerate(lines, start=1):
         y1 = 100 + (index - 1) * 48
         blocks.append(
             OcrBlock(
                 text=line,
                 bbox=[80, y1, 920, y1 + 34],
-                confidence=0.88 if index == 1 else 0.82,
+                confidence=round(float(confidence), 2),
                 block_type="text",
             )
         )
 
     confidence = round(sum(block.confidence for block in blocks) / len(blocks), 2)
     return [OcrPage(page_number=1, width=1000, height=1400, blocks=blocks, ocr_confidence=confidence)]
+
+
+def build_pages_from_upload(
+    content: bytes,
+    filename: str,
+    *,
+    ocr_provider=None,
+    source_path: Optional[Path] = None,
+    document_type: DocumentType = DocumentType.unknown,
+) -> List[OcrPage]:
+    try:
+        text = content.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        text = ""
+
+    if text:
+        lines = [(line.strip(), 0.88 if index == 0 else 0.82) for index, line in enumerate(text.splitlines()) if line.strip()]
+        return _pages_from_text_lines(lines, filename)
+
+    if ocr_provider is not None and source_path is not None:
+        observations = ocr_provider.read(source_path, document_type)
+        lines = [
+            (
+                str(observation.get("text") or "").strip(),
+                float(observation.get("confidence") or 0.50),
+            )
+            for observation in observations
+            if str(observation.get("text") or "").strip()
+        ]
+        if lines:
+            return _pages_from_text_lines(lines, filename)
+
+    return _pages_from_text_lines([], filename)
 
 
 def _all_text(pages: Iterable[OcrPage]) -> str:
@@ -166,13 +195,21 @@ async def process_enterprise_document(
     content: bytes,
     declared_document_type: DocumentType,
     gemma_client: GemmaReasoningClient,
+    source_path: Optional[Path] = None,
+    ocr_provider=None,
 ) -> tuple[FinancialDocument, List[ExtractedField], List[ValidationFinding]]:
     document = FinancialDocument(
         filename=filename,
         declared_document_type=declared_document_type,
         document_type=declared_document_type,
         status=DocumentStatus.uploaded,
-        pages=build_pages_from_upload(content, filename),
+        pages=build_pages_from_upload(
+            content,
+            filename,
+            ocr_provider=ocr_provider,
+            source_path=source_path,
+            document_type=declared_document_type,
+        ),
     )
     document.page_count = len(document.pages)
 
