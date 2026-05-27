@@ -624,18 +624,18 @@ function statusTone(status?: string) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
   if (["processing", "loading", "running"].includes(value)) {
-    return "border-blue-200 bg-blue-50 text-blue-700";
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
   }
-  return "border-zinc-200 bg-zinc-50 text-zinc-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
 function blockStyle(block: OcrBlock, page: OcrPage) {
   const [x1, y1, x2, y2] = block.bbox;
   return {
-    left: `${(x1 / page.width) * 100}%`,
-    top: `${(y1 / page.height) * 100}%`,
-    width: `${((x2 - x1) / page.width) * 100}%`,
-    height: `${((y2 - y1) / page.height) * 100}%`,
+    left: `${6 + (x1 / page.width) * 88}%`,
+    top: `${22 + (y1 / page.height) * 72}%`,
+    width: `${((x2 - x1) / page.width) * 88}%`,
+    height: `${((y2 - y1) / page.height) * 72}%`,
   };
 }
 
@@ -756,6 +756,20 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     null;
   const accuracyRows = Object.entries(accuracy.data?.field_accuracy ?? {}).slice(0, 5);
   const retryEvent = integrationOps.data?.retry_queue[0] ?? null;
+  const showCaseIntake = section === "cases";
+  const showDocumentIntake = section === "documents";
+  const showWorkQueue = ["command", "cases", "documents", "review", "verification", "integrations"].includes(section);
+  const showLeftRail = showCaseIntake || showDocumentIntake || showWorkQueue;
+  const showRightRail = ["command", "cases", "documents", "review", "verification", "integrations", "admin"].includes(section);
+  const productionGridClass =
+    section === "command" ? "grid gap-4 xl:grid-cols-3" : section === "templates" ? "grid gap-4 xl:grid-cols-2" : "grid gap-4";
+  const workspaceGridClass = showLeftRail
+    ? showRightRail
+      ? "mx-auto grid max-w-[1800px] gap-4 px-4 py-5 sm:px-6 xl:grid-cols-[188px_260px_minmax(280px,1fr)_300px] 2xl:grid-cols-[232px_340px_minmax(0,1fr)_420px]"
+      : "mx-auto grid max-w-[1600px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[216px_320px_minmax(0,1fr)] 2xl:grid-cols-[232px_360px_minmax(0,1fr)]"
+    : showRightRail
+      ? "mx-auto grid max-w-[1600px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[216px_minmax(0,1fr)_380px] 2xl:grid-cols-[232px_minmax(0,1fr)_420px]"
+      : "mx-auto grid max-w-[1380px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[216px_minmax(0,1fr)] 2xl:grid-cols-[232px_minmax(0,1fr)]";
 
   const summaryCounts = operations.data?.counts ?? {
     total_cases: cases.length,
@@ -1409,20 +1423,20 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f5f4] text-zinc-950">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-[1680px] flex-col gap-4 px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+    <main className="min-h-screen bg-slate-50 text-slate-950">
+      <header className="sticky top-0 z-30 border-b border-border-soft/80 bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1800px] flex-col gap-4 px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase text-teal-700">LipiOCR Enterprise</p>
-            <h1 className="mt-1 text-2xl font-semibold">{activeNav.label}</h1>
-            <p className="mt-1 max-w-2xl text-sm text-zinc-500">{activeNav.description}</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">LipiOCR Enterprise</p>
+            <h1 className="mt-1 text-3xl font-extrabold text-slate-950">{activeNav.label}</h1>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{activeNav.description}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <Pill icon={<Activity size={16} />} label={message} />
             <Pill icon={<BrainCircuit size={16} />} label={aiHealth.data?.model ?? "gemma-4-26b-4bit"} />
             <Pill icon={<Route size={16} />} label={platform.data?.deployment_target ?? "on-prem/private"} />
             <button
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 font-medium hover:bg-zinc-50"
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-indigo-200 hover:text-indigo-700 hover:shadow-[var(--shadow-lift)]"
               onClick={refreshAll}
               type="button"
             >
@@ -1433,8 +1447,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
         </div>
       </header>
 
-      <section className="border-b border-zinc-200 bg-[#fbfbfa]">
-        <div className="mx-auto grid max-w-[1680px] gap-3 px-4 py-4 sm:px-6 lg:grid-cols-5">
+      <section className="border-b border-border-soft/80 bg-slate-50/70">
+        <div className="mx-auto grid max-w-[1800px] gap-3 px-4 py-4 sm:px-6 lg:grid-cols-5">
           <Kpi icon={<Boxes size={18} />} label="Cases" value={summaryCounts.total_cases} />
           <Kpi icon={<ClipboardCheck size={18} />} label="Review" value={summaryCounts.review_required} />
           <Kpi icon={<ShieldAlert size={18} />} label="Exceptions" value={summaryCounts.exceptions} />
@@ -1443,36 +1457,41 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1800px] gap-4 px-4 py-4 sm:px-6 xl:grid-cols-[200px_280px_minmax(320px,1fr)_340px] 2xl:grid-cols-[232px_340px_minmax(0,1fr)_420px]">
+      <div className={workspaceGridClass}>
         <aside className="space-y-2">
-          <div className="rounded-lg border border-zinc-200 bg-white p-2">
+          <nav className="sticky top-32 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-[var(--shadow-soft)]">
             {workspaceNav.map((item) => {
               const active = item.href === activeHref || item.section === section;
               return (
                 <Link
-                  className={`mb-1 grid grid-cols-[24px_1fr] gap-2 rounded-md px-3 py-2 text-sm last:mb-0 ${
-                    active ? "bg-teal-50 text-teal-900" : "text-zinc-700 hover:bg-zinc-50"
+                  className={`group mb-1 grid grid-cols-[28px_1fr] gap-2 rounded-xl px-3 py-2.5 text-sm last:mb-0 ${
+                    active
+                      ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
+                      : "text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-indigo-700"
                   }`}
                   href={item.href}
                   key={item.section}
                 >
-                  <span className={active ? "text-teal-700" : "text-zinc-500"}>{item.icon}</span>
+                  <span className={active ? "text-white" : "text-slate-400 group-hover:text-indigo-600"}>{item.icon}</span>
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold">{item.label}</span>
-                    <span className="mt-0.5 block line-clamp-2 text-xs text-zinc-500">{item.description}</span>
+                    <span className="block truncate font-bold">{item.label}</span>
+                    <span className={`mt-0.5 block line-clamp-2 text-xs ${active ? "text-indigo-100" : "text-slate-500"}`}>
+                      {item.description}
+                    </span>
                   </span>
                 </Link>
               );
             })}
-          </div>
+          </nav>
         </aside>
+        {showLeftRail ? (
         <aside className="space-y-4">
           {section === "cases" ? (
           <Panel title="Intake" icon={<Upload size={16} />}>
             <form className="space-y-3" onSubmit={createCase}>
               <FieldLabel label="Case Type">
                 <select
-                  className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   value={caseType}
                   onChange={(event) => setCaseType(event.target.value as CaseType)}
                 >
@@ -1485,20 +1504,20 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               </FieldLabel>
               <FieldLabel label="Applicant">
                 <input
-                  className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none focus:border-teal-600"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   value={applicantName}
                   onChange={(event) => setApplicantName(event.target.value)}
                 />
               </FieldLabel>
               <FieldLabel label="CBS / LOS Ref">
                 <input
-                  className="h-10 w-full rounded-md border border-zinc-300 px-3 font-mono text-sm outline-none focus:border-teal-600"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   value={customerRef}
                   onChange={(event) => setCustomerRef(event.target.value)}
                 />
               </FieldLabel>
               <button
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-3 text-sm font-bold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] disabled:opacity-60"
                 disabled={busy}
                 type="submit"
               >
@@ -1514,7 +1533,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             <form className="space-y-3" onSubmit={handleUpload}>
               <FieldLabel label="Document Type">
                 <select
-                  className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   value={documentType}
                   onChange={(event) => setDocumentType(event.target.value as DocumentType)}
                 >
@@ -1525,8 +1544,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   ))}
                 </select>
               </FieldLabel>
-              <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 text-center hover:border-teal-500">
-                <Upload className="mb-2 text-teal-700" size={22} />
+              <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/60 px-3 text-center hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50">
+                <Upload className="mb-2 text-indigo-600" size={22} />
                 <span className="max-w-full truncate text-sm font-medium">{file?.name ?? "Choose document"}</span>
                 <input className="sr-only" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
               </label>
@@ -1547,13 +1566,13 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               <div className="grid gap-2">
                 {(operations.data?.lanes ?? []).map((lane) => (
                   <button
-                    className="grid grid-cols-[1fr_auto] gap-2 rounded-md border border-zinc-200 bg-white p-3 text-left hover:border-teal-500"
+                    className="grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[var(--shadow-soft)]"
                     key={lane.key}
                     type="button"
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold">{lane.label}</span>
-                      <span className="block truncate text-xs text-zinc-500">{lane.description}</span>
+                      <span className="block truncate text-xs text-slate-500">{lane.description}</span>
                     </span>
                     <span className="font-mono text-lg font-semibold">{lane.count}</span>
                   </button>
@@ -1563,8 +1582,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 {cases.length ? (
                   cases.map((item) => (
                     <button
-                      className={`mb-2 block w-full rounded-md border p-3 text-left hover:border-teal-500 ${
-                        selectedCase?.id === item.id ? "border-teal-600 bg-teal-50" : "border-zinc-200 bg-white"
+                      className={`mb-2 block w-full rounded-xl border p-3 text-left shadow-sm hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[var(--shadow-soft)] ${
+                        selectedCase?.id === item.id ? "border-indigo-300 bg-indigo-50 text-indigo-950" : "border-slate-200 bg-white"
                       }`}
                       key={item.id}
                       onClick={() => {
@@ -1576,25 +1595,26 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                       <span className="flex items-start justify-between gap-2">
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold">{item.applicant_name}</span>
-                          <span className="block truncate font-mono text-xs text-zinc-500">
+                          <span className="block truncate font-mono text-xs text-slate-500">
                             {item.integration_ref ?? compactId(item.id)}
                           </span>
                         </span>
                         <StatusBadge status={item.status} />
                       </span>
-                      <span className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+                      <span className="mt-2 flex items-center justify-between text-xs text-slate-500">
                         <span>{labelize(item.case_type)}</span>
                         <span>{item.documents.length} docs</span>
                       </span>
                     </button>
                   ))
                 ) : (
-                  <p className="text-sm text-zinc-500">No active cases</p>
+                  <p className="text-sm text-slate-500">No active cases</p>
                 )}
               </div>
             </div>
           </Panel>
         </aside>
+        ) : null}
 
         <section className="space-y-4">
           {["command", "admin"].includes(section) ? (
@@ -1602,15 +1622,15 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             <ResourceError resource={platform} />
             <div className="grid gap-2 lg:grid-cols-3">
               {(platform.data?.components ?? []).map((component) => (
-                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3" key={component.key}>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" key={component.key}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{component.label}</p>
-                      <p className="mt-1 truncate text-xs text-zinc-500">{component.detail}</p>
+                      <p className="mt-1 truncate text-xs text-slate-500">{component.detail}</p>
                     </div>
                     <StatusBadge status={component.status} />
                   </div>
-                  <p className="mt-3 line-clamp-2 text-xs text-zinc-600">{component.next_step}</p>
+                  <p className="mt-3 line-clamp-2 text-xs text-slate-600">{component.next_step}</p>
                 </div>
               ))}
             </div>
@@ -1620,7 +1640,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           {["cases", "documents", "review", "verification"].includes(section) ? (
           <Panel title={selectedCase?.applicant_name ?? "Case Workbench"} icon={<Eye size={16} />}>
             {selectedCase ? (
-              <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.95fr)_minmax(420px,1.05fr)]">
+              <div className="grid gap-4 2xl:grid-cols-[minmax(360px,0.95fr)_minmax(420px,1.05fr)]">
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                     <Info label="Case" value={compactId(selectedCase.id)} />
@@ -1628,22 +1648,22 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     <Info label="Branch" value={selectedCase.branch_code ?? "KTM-001"} />
                     <Info label="Readiness" value={pct(readinessScore)} />
                   </div>
-                  <div className="relative aspect-[0.72] overflow-hidden rounded-md border border-zinc-300 bg-[#fbfaf7] shadow-inner">
-                    <div className="absolute inset-x-5 top-5 flex items-start justify-between border-b border-zinc-300 pb-3">
+                  <div className="relative aspect-[0.72] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner">
+                    <div className="absolute inset-x-5 top-5 flex items-start justify-between border-b border-slate-200 pb-3">
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold uppercase text-zinc-500">
+                        <p className="text-xs font-semibold uppercase text-slate-500">
                           {selectedDocument ? labelize(selectedDocument.document_type) : "Document Packet"}
                         </p>
                         <p className="mt-1 truncate text-lg font-semibold">
                           {selectedDocument?.filename ?? "No document uploaded"}
                         </p>
                       </div>
-                      <FileText className="shrink-0 text-teal-700" size={26} />
+                      <FileText className="shrink-0 text-indigo-600" size={26} />
                     </div>
                     {selectedPage ? (
                       selectedPage.blocks.map((block, index) => (
                         <div
-                          className="absolute overflow-hidden rounded-sm border border-teal-600 bg-teal-100/70 px-1.5 py-1 text-[10px] font-semibold leading-tight text-teal-950"
+                          className="absolute overflow-hidden rounded-sm border border-indigo-500 bg-indigo-100/70 px-1.5 py-1 text-[10px] font-semibold leading-tight text-indigo-950"
                           key={`${block.text}-${index}`}
                           style={blockStyle(block, selectedPage)}
                           title={block.text}
@@ -1653,7 +1673,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         </div>
                       ))
                     ) : (
-                      <div className="absolute inset-x-6 top-28 text-sm text-zinc-500">No OCR evidence yet.</div>
+                      <div className="absolute inset-x-6 top-28 text-sm text-slate-500">No OCR evidence yet.</div>
                     )}
                   </div>
                 </div>
@@ -1732,8 +1752,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     </ActionButton>
                   </div>
 
-                  <div className="rounded-md border border-zinc-200">
-                    <div className="grid grid-cols-[1fr_96px_120px] border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold uppercase text-zinc-500">
+                  <div className="rounded-xl border border-slate-200">
+                    <div className="grid grid-cols-[1fr_96px_120px] border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500">
                       <span>Field</span>
                       <span>Confidence</span>
                       <span>Evidence</span>
@@ -1742,28 +1762,28 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                       {selectedCase.extracted_fields.length ? (
                         selectedCase.extracted_fields.map((field) => (
                           <div
-                            className="grid gap-2 border-b border-zinc-100 p-3 last:border-b-0 sm:grid-cols-[1fr_96px_120px]"
+                            className="grid gap-2 border-b border-slate-100 p-3 last:border-b-0 sm:grid-cols-[1fr_96px_120px]"
                             key={`${field.key}-${field.document_id ?? ""}`}
                           >
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold text-zinc-500">{field.label}</p>
+                              <p className="text-xs font-semibold text-slate-500">{field.label}</p>
                               <p className="mt-1 truncate text-sm font-medium">{field.value || "Unclear"}</p>
-                              <p className="mt-1 truncate text-xs text-zinc-500">{field.validation_message}</p>
+                              <p className="mt-1 truncate text-xs text-slate-500">{field.validation_message}</p>
                             </div>
                             <div className="flex items-center">
-                              <span className="rounded-md bg-zinc-100 px-2 py-1 font-mono text-xs">
+                              <span className="rounded-xl bg-slate-100 px-2 py-1 font-mono text-xs">
                                 {pct(field.confidence)}
                               </span>
                             </div>
                             <div className="min-w-0 text-xs">
-                              <p className="font-mono text-zinc-600">p{field.evidence.source_page}</p>
-                              <p className="truncate text-zinc-500">{field.evidence.evidence_text}</p>
-                              <p className="mt-1 truncate text-teal-700">{field.extracted_by}</p>
+                              <p className="font-mono text-slate-600">p{field.evidence.source_page}</p>
+                              <p className="truncate text-slate-500">{field.evidence.evidence_text}</p>
+                              <p className="mt-1 truncate text-indigo-600">{field.extracted_by}</p>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <p className="p-4 text-sm text-zinc-500">No extracted fields</p>
+                        <p className="p-4 text-sm text-slate-500">No extracted fields</p>
                       )}
                     </div>
                   </div>
@@ -1771,13 +1791,13 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   {packetResults.length ? (
                     <div className="grid gap-2 md:grid-cols-2">
                       {packetResults.map((document, index) => (
-                        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs" key={`${document.document_id}-${index}`}>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" key={`${document.document_id}-${index}`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="truncate font-semibold">
                                 {labelize(document.predicted_type ?? document.document_type)}
                               </p>
-                              <p className="mt-1 truncate text-zinc-500">{document.filename ?? document.reason}</p>
+                              <p className="mt-1 truncate text-slate-500">{document.filename ?? document.reason}</p>
                             </div>
                             <span className="font-mono">{pct(document.confidence)}</span>
                           </div>
@@ -1788,7 +1808,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 </div>
               </div>
             ) : (
-              <div className="p-8 text-sm text-zinc-500">Create or select a case.</div>
+              <div className="p-8 text-sm text-slate-500">Create or select a case.</div>
             )}
           </Panel>
           ) : null}
@@ -1798,17 +1818,17 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             <ResourceError resource={profiles} />
             <div className="grid gap-2 lg:grid-cols-2">
               {(profiles.data?.profiles ?? []).map((profile) => (
-                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs" key={profile.key}>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" key={profile.key}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{profile.name}</p>
-                      <p className="mt-1 truncate text-zinc-500">
+                      <p className="mt-1 truncate text-slate-500">
                         {labelize(profile.category)} · {labelize(profile.mode)}
                       </p>
                     </div>
                     <StatusBadge status={profile.status} />
                   </div>
-                  <p className="mt-3 line-clamp-2 text-zinc-600">{profile.description}</p>
+                  <p className="mt-3 line-clamp-2 text-slate-600">{profile.description}</p>
                 </div>
               ))}
             </div>
@@ -1817,19 +1837,22 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
 
           {["command", "templates", "analytics"].includes(section) ? (
           <Panel title="Production Pipeline" icon={<SearchCheck size={16} />}>
-            <div className="grid gap-4 xl:grid-cols-3">
+            <div className={productionGridClass}>
+              {section !== "analytics" ? (
               <div className="space-y-2">
                 <SectionLabel icon={<FileSearch size={15} />} label={`OCR: ${ocrPipeline.data?.active_provider ?? "loading"}`} />
                 {(ocrPipeline.data?.providers ?? []).map((provider) => (
-                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={provider.key}>
+                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={provider.key}>
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{provider.label}</p>
-                      <p className="mt-1 truncate text-zinc-500">{provider.best_for}</p>
+                      <p className="mt-1 truncate text-slate-500">{provider.best_for}</p>
                     </div>
                     <StatusBadge status={provider.status} />
                   </div>
                 ))}
               </div>
+              ) : null}
+              {section !== "analytics" ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <SectionLabel icon={<FileCog size={15} />} label="Template Studio" />
@@ -1844,10 +1867,10 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 </div>
                 <ResourceError resource={templateStudio} />
                 {(templateStudio.data?.templates ?? []).slice(0, 6).map((template) => (
-                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={template.document_type}>
+                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={template.document_type}>
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{template.name}</p>
-                      <p className="mt-1 truncate text-zinc-500">
+                      <p className="mt-1 truncate text-slate-500">
                         {template.field_count} fields · {labelize(template.mode)}
                       </p>
                     </div>
@@ -1855,15 +1878,17 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   </div>
                 ))}
               </div>
+              ) : null}
+              {section !== "templates" ? (
               <div className="space-y-2">
                 <SectionLabel icon={<Gauge size={15} />} label={`Accuracy: ${accuracy.data?.correction_count ?? 0} corrections`} />
                 <ResourceError resource={accuracy} />
                 {accuracyRows.length ? (
                   accuracyRows.map(([fieldKey, row]) => (
-                    <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={fieldKey}>
+                    <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={fieldKey}>
                       <div className="min-w-0">
                         <p className="truncate font-semibold">{labelize(fieldKey)}</p>
-                        <p className="mt-1 truncate text-zinc-500">
+                        <p className="mt-1 truncate text-slate-500">
                           {row.observed} observed · {row.corrections} corrected
                         </p>
                       </div>
@@ -1871,16 +1896,18 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     </div>
                   ))
                 ) : (
-                  <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-500">
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
                     Reviewer corrections will populate accuracy drift.
                   </p>
                 )}
               </div>
+              ) : null}
             </div>
           </Panel>
           ) : null}
         </section>
 
+        {showRightRail ? (
         <aside className="space-y-4">
           {["command", "cases", "documents"].includes(section) ? (
           <Panel title="Decision Rail" icon={<Fingerprint size={16} />}>
@@ -1892,10 +1919,10 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             </div>
             <div className="mt-3 space-y-2">
               {(intelligence.data?.checklist ?? []).map((item) => (
-                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={item.key}>
+                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={item.key}>
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{item.label}</p>
-                    <p className="mt-1 truncate text-zinc-500">{item.message}</p>
+                    <p className="mt-1 truncate text-slate-500">{item.message}</p>
                   </div>
                   <StatusBadge status={item.status} />
                 </div>
@@ -1953,16 +1980,16 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             </div>
             <div className="mt-3 max-h-48 space-y-2 overflow-auto pr-1">
               {(reviewWorkbench.data?.comments ?? []).slice(-3).map((comment) => (
-                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs" key={comment.comment_id}>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" key={comment.comment_id}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="truncate font-semibold">{comment.author}</p>
-                    <span className="font-mono text-zinc-500">{formatDate(comment.created_at)}</span>
+                    <span className="font-mono text-slate-500">{formatDate(comment.created_at)}</span>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-zinc-600">{comment.message}</p>
+                  <p className="mt-1 line-clamp-2 text-slate-600">{comment.message}</p>
                 </div>
               ))}
               {(reviewWorkbench.data?.rework_requests ?? []).slice(-2).map((request) => (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={request.request_id}>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs" key={request.request_id}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="truncate font-semibold text-amber-900">{request.reason}</p>
                     <StatusBadge status={request.status} />
@@ -1983,7 +2010,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             </div>
             <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
               {validationFindings.map((finding, index) => (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={`${finding.code}-${index}`}>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs" key={`${finding.code}-${index}`}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 truncate font-semibold text-amber-900">{finding.code}</p>
                     <StatusBadge status={finding.severity} />
@@ -1992,16 +2019,16 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 </div>
               ))}
               {(verification.data?.checks ?? []).map((check) => (
-                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={check.key}>
+                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={check.key}>
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{check.label}</p>
-                    <p className="mt-1 line-clamp-2 text-zinc-500">{check.message}</p>
+                    <p className="mt-1 line-clamp-2 text-slate-500">{check.message}</p>
                   </div>
                   <StatusBadge status={check.status} />
                 </div>
               ))}
               {!validationFindings.length && !verification.data?.checks.length ? (
-                <p className="text-sm text-zinc-500">No validation or verification output</p>
+                <p className="text-sm text-slate-500">No validation or verification output</p>
               ) : null}
             </div>
           </Panel>
@@ -2031,20 +2058,20 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               </ActionButton>
             </div>
             {adapterRun.data ? (
-              <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs">
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
                 <div className="flex items-start justify-between gap-2">
                   <p className="truncate font-semibold">{adapterRun.data.check.label}</p>
                   <StatusBadge status={adapterRun.data.check.status} />
                 </div>
-                <p className="mt-1 line-clamp-2 text-zinc-600">{adapterRun.data.check.message}</p>
+                <p className="mt-1 line-clamp-2 text-slate-600">{adapterRun.data.check.message}</p>
               </div>
             ) : null}
             <div className="mt-3 max-h-56 space-y-2 overflow-auto pr-1">
               {(verificationAdapters.data?.adapters ?? []).map((adapter) => (
-                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={adapter.key}>
+                <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={adapter.key}>
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{adapter.label}</p>
-                    <p className="mt-1 truncate text-zinc-500">{labelize(adapter.mode)}</p>
+                    <p className="mt-1 truncate text-slate-500">{labelize(adapter.mode)}</p>
                   </div>
                   <StatusBadge status={adapter.status} />
                 </div>
@@ -2058,7 +2085,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             <div className="space-y-3">
               <FieldLabel label="Export Profile">
                 <select
-                  className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   value={profileKey}
                   onChange={(event) => setProfileKey(event.target.value)}
                 >
@@ -2069,7 +2096,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   ))}
                 </select>
               </FieldLabel>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <ActionButton
                   busy={activeAction === "webhook"}
                   disabled={busy || !selectedCase}
@@ -2087,6 +2114,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   Link
                 </ActionButton>
                 <ActionButton
+                  className="col-span-2"
                   busy={activeAction === "export-profile"}
                   disabled={busy || !selectedCase}
                   icon={<Download size={14} />}
@@ -2143,16 +2171,16 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             </div>
             <div className="mt-3 max-h-44 space-y-2 overflow-auto pr-1">
               {(integrationOps.data?.webhooks ?? []).slice(-2).map((hook) => (
-                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs" key={hook.key}>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" key={hook.key}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="truncate font-semibold">{hook.key}</p>
                     <StatusBadge status={hook.status} />
                   </div>
-                  <p className="mt-1 truncate font-mono text-zinc-500">{hook.url}</p>
+                  <p className="mt-1 truncate font-mono text-slate-500">{hook.url}</p>
                 </div>
               ))}
               {(integrationOps.data?.retry_queue ?? []).slice(0, 2).map((event) => (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={event.event_id}>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs" key={event.event_id}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="truncate font-mono font-semibold text-amber-900">{event.event_id}</p>
                     <StatusBadge status={event.status} />
@@ -2166,7 +2194,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
 
           {["integrations", "cases"].includes(section) ? (
           <Panel title="Export Payload" icon={<Database size={16} />}>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-zinc-50">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-50">
               {exportJson || "{ }"}
             </pre>
           </Panel>
@@ -2177,18 +2205,19 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             <ol className="space-y-2">
               {(selectedCase?.audit_events ?? []).slice(0, 8).map((event, index) => (
                 <li className="grid grid-cols-[86px_1fr] gap-3 text-xs" key={`${event.action}-${index}`}>
-                  <span className="font-mono text-zinc-500">{formatDate(event.created_at)}</span>
+                  <span className="font-mono text-slate-500">{formatDate(event.created_at)}</span>
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{event.action}</span>
-                    <span className="block truncate text-zinc-500">{event.actor}</span>
+                    <span className="block truncate text-slate-500">{event.actor}</span>
                   </span>
                 </li>
               ))}
-              {!selectedCase?.audit_events.length ? <p className="text-sm text-zinc-500">No audit events</p> : null}
+              {!selectedCase?.audit_events.length ? <p className="text-sm text-slate-500">No audit events</p> : null}
             </ol>
           </Panel>
           ) : null}
         </aside>
+        ) : null}
       </div>
     </main>
   );
@@ -2196,10 +2225,10 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
 
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <span className="text-zinc-500">{icon}</span>
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-soft)]">
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <h2 className="text-sm font-bold text-slate-950">{title}</h2>
+        <span className="rounded-xl bg-indigo-50 p-2 text-indigo-600">{icon}</span>
       </div>
       <div className="p-4">{children}</div>
     </section>
@@ -2209,7 +2238,7 @@ function Panel({ title, icon, children }: { title: string; icon: ReactNode; chil
 function FieldLabel({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-semibold uppercase text-zinc-500">{label}</span>
+      <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</span>
       {children}
     </label>
   );
@@ -2217,20 +2246,20 @@ function FieldLabel({ label, children }: { label: string; children: ReactNode })
 
 function Kpi({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4">
+    <div className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-[var(--shadow-soft)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-zinc-600">{label}</span>
-        <span className="text-teal-700">{icon}</span>
+        <span className="text-sm font-semibold text-slate-500">{label}</span>
+        <span className="rounded-xl bg-indigo-50 p-2 text-indigo-600 group-hover:bg-indigo-100">{icon}</span>
       </div>
-      <p className="mt-3 font-mono text-3xl font-semibold">{value}</p>
+      <p className="mt-3 font-mono text-3xl font-bold text-slate-950">{value}</p>
     </div>
   );
 }
 
 function Pill({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <span className="inline-flex h-9 max-w-full items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 font-medium text-zinc-700">
-      <span className="shrink-0 text-teal-700">{icon}</span>
+    <span className="inline-flex h-10 max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-[var(--shadow-soft)]">
+      <span className="shrink-0 text-indigo-600">{icon}</span>
       <span className="truncate">{label}</span>
     </span>
   );
@@ -2238,34 +2267,34 @@ function Pill({ icon, label }: { icon: ReactNode; label: string }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-zinc-900">{value}</p>
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-bold text-slate-950">{value}</p>
     </div>
   );
 }
 
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-md bg-zinc-50 p-3 text-xs">
-      <p className="font-semibold">{label}</p>
-      <p className="mt-1 truncate font-mono text-zinc-500">{value}</p>
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+      <p className="font-bold text-slate-900">{label}</p>
+      <p className="mt-1 truncate font-mono text-slate-500">{value}</p>
     </div>
   );
 }
 
 function SectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-      <span className="text-teal-700">{icon}</span>
-      {label}
+    <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
+      <span className="rounded-lg bg-indigo-50 p-1.5 text-indigo-600">{icon}</span>
+      <span>{label}</span>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status?: string }) {
   return (
-    <span className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 text-xs font-semibold ${statusTone(status)}`}>
+    <span className={`inline-flex max-w-full items-center rounded-lg border px-2.5 py-1 text-xs font-bold ${statusTone(status)}`}>
       <span className="truncate">{labelize(status)}</span>
     </span>
   );
@@ -2276,7 +2305,7 @@ function ResourceError<T>({ resource }: { resource: ResourceState<T> }) {
     return null;
   }
   return (
-    <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+    <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-800">
       <AlertTriangle className="mt-0.5 shrink-0" size={14} />
       <p className="min-w-0 break-words">{resource.error}</p>
     </div>
@@ -2297,12 +2326,12 @@ function ActionButton({
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const toneClass =
     tone === "primary"
-      ? "border-teal-700 bg-teal-700 text-white hover:bg-teal-800"
-      : "border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50";
+      ? "border-indigo-600 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]"
+      : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-700 hover:shadow-[var(--shadow-soft)]";
   return (
     <button
       {...props}
-      className={`inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-md border px-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${toneClass} ${
+      className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full border px-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${toneClass} ${
         props.className ?? ""
       }`}
       disabled={props.disabled || busy}

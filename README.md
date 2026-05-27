@@ -90,6 +90,8 @@ The frontend is now organized as a route-backed enterprise workspace instead of 
 - `/analytics`: Accuracy analytics for reviewer corrections, field confidence, and drift.
 - `/admin`: Platform readiness and audit posture for tenant/security operations.
 
+The visual system uses a Corporate Trust treatment: Plus Jakarta Sans typography, slate surfaces, indigo/violet actions, colored elevation shadows, rounded operational cards, and route-level density controls so each module stays focused.
+
 ## Run Locally
 
 Backend:
