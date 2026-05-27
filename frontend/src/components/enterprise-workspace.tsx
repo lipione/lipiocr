@@ -1467,17 +1467,12 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           <Panel title="Intake" icon={<Upload size={16} />}>
             <form className="space-y-3" onSubmit={createCase}>
               <FieldLabel label="Case Type">
-                <select
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                <SegmentedPicker
+                  ariaLabel="Case type"
+                  options={caseTypes}
                   value={caseType}
-                  onChange={(event) => setCaseType(event.target.value as CaseType)}
-                >
-                  {caseTypes.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setCaseType(next as CaseType)}
+                />
               </FieldLabel>
               <FieldLabel label="Applicant">
                 <input
@@ -1509,17 +1504,13 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           <Panel title="Document Intake" icon={<FileCog size={16} />}>
             <form className="space-y-3" onSubmit={handleUpload}>
               <FieldLabel label="Document Type">
-                <select
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                <SegmentedPicker
+                  ariaLabel="Document type"
+                  compact
+                  options={documentTypes}
                   value={documentType}
-                  onChange={(event) => setDocumentType(event.target.value as DocumentType)}
-                >
-                  {documentTypes.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setDocumentType(next as DocumentType)}
+                />
               </FieldLabel>
               <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/60 px-3 text-center hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50">
                 <Upload className="mb-2 text-indigo-600" size={22} />
@@ -2061,17 +2052,12 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           <Panel title="Integration Handoff" icon={<Plug size={16} />}>
             <div className="space-y-3">
               <FieldLabel label="Export Profile">
-                <select
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                <SegmentedPicker
+                  ariaLabel="Export profile"
+                  options={exportProfiles.map((key) => ({ value: key, label: labelize(key) }))}
                   value={profileKey}
-                  onChange={(event) => setProfileKey(event.target.value)}
-                >
-                  {exportProfiles.map((key) => (
-                    <option key={key} value={key}>
-                      {labelize(key)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setProfileKey}
+                />
               </FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 <ActionButton
@@ -2214,10 +2200,52 @@ function Panel({ title, icon, children }: { title: string; icon: ReactNode; chil
 
 function FieldLabel({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block">
+    <div className="block">
       <span className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</span>
       {children}
-    </label>
+    </div>
+  );
+}
+
+function SegmentedPicker({
+  ariaLabel,
+  compact,
+  onChange,
+  options,
+  value,
+}: {
+  ariaLabel: string;
+  compact?: boolean;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  value: string;
+}) {
+  return (
+    <div
+      aria-label={ariaLabel}
+      className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-1"}`}
+      role="radiogroup"
+    >
+      {options.map((item) => {
+        const active = item.value === value;
+        return (
+          <button
+            aria-checked={active}
+            className={`min-h-10 rounded-xl border px-3 py-2 text-left text-xs font-bold ${
+              active
+                ? "border-indigo-500 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
+                : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+            }`}
+            key={item.value}
+            onClick={() => onChange(item.value)}
+            role="radio"
+            type="button"
+          >
+            <span className="block truncate">{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
