@@ -2,22 +2,30 @@
 
 import {
   Activity,
+  AlertTriangle,
   BadgeCheck,
   Building2,
   ClipboardCheck,
   Download,
+  FileStack,
   FileSearch,
   FileText,
-  History,
+  Fingerprint,
+  KeyRound,
+  Link2,
   Loader2,
   Network,
+  Play,
+  Plug,
   Plus,
   RefreshCcw,
   Save,
   ShieldCheck,
+  SplitSquareHorizontal,
   Upload,
+  Zap,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type Dispatch, FormEvent, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 
 type CaseType = "individual_kyc" | "business_kyb" | "loan_onboarding" | "document_digitization";
 type CaseStatus = "created" | "processing" | "review_required" | "approved" | "rejected" | "exported";
@@ -130,6 +138,145 @@ type IntegrationManifest = {
   core_endpoints: string[];
 };
 
+type LoadStatus = "idle" | "loading" | "ready" | "error";
+
+type ResourceState<T> = {
+  status: LoadStatus;
+  data: T | null;
+  error: string | null;
+  updatedAt: string | null;
+};
+
+type IntelligenceChecklistItem = {
+  id?: string;
+  key?: string;
+  label?: string;
+  title?: string;
+  status?: string;
+  severity?: string;
+  message?: string;
+  evidence?: string;
+  category?: string;
+  confidence?: number;
+};
+
+type CaseIntelligence = {
+  summary?: string;
+  completeness_score?: number;
+  risk_score?: number;
+  checklist?: IntelligenceChecklistItem[];
+  policy_signals?: IntelligenceChecklistItem[];
+  next_actions?: string[];
+};
+
+type PacketDocument = {
+  id?: string;
+  filename?: string;
+  document_type?: string;
+  declared_document_type?: string;
+  status?: string;
+  confidence?: number;
+  pages?: number[];
+  page_count?: number;
+  reason?: string;
+};
+
+type SplitPreviewResponse = {
+  packet_id?: string;
+  documents?: PacketDocument[];
+  pages?: PacketDocument[];
+  warnings?: string[];
+};
+
+type ClassificationResponse = {
+  documents?: PacketDocument[];
+  classifications?: PacketDocument[];
+  summary?: string;
+  case?: KycCase;
+};
+
+type ValidationResponse = {
+  status?: string;
+  findings?: ValidationFinding[];
+  warnings?: string[];
+  case?: KycCase;
+};
+
+type VerificationResponse = {
+  run_id?: string;
+  status?: string;
+  decision?: string;
+  score?: number;
+  checks?: IntelligenceChecklistItem[];
+  findings?: ValidationFinding[];
+  case?: KycCase;
+};
+
+type IntegrationProfile = {
+  key?: string;
+  profile_key?: string;
+  name?: string;
+  label?: string;
+  category?: string;
+  status?: string;
+  adapter_status?: string;
+  mode?: string;
+  destination?: string;
+  description?: string;
+  configured?: boolean;
+};
+
+type IntegrationProfilesResponse =
+  | IntegrationProfile[]
+  | {
+      profiles?: IntegrationProfile[];
+      adapters?: IntegrationProfile[];
+      items?: IntegrationProfile[];
+    };
+
+type WebhookTestResponse = {
+  status?: string;
+  profile_key?: string;
+  event_id?: string;
+  message?: string;
+};
+
+type EmbeddedReviewLinkResponse = {
+  url?: string;
+  review_url?: string;
+  expires_at?: string;
+};
+
+type TenantAdminResponse = {
+  institution_name?: string;
+  tenant_key?: string;
+  environment?: string;
+  data_residency?: string;
+  retention_days?: number;
+  features?: string[];
+};
+
+type RbacResponse = {
+  roles?: { name?: string; users?: number; permissions?: string[] }[];
+  maker_checker?: boolean;
+  active_users?: number;
+};
+
+type AuditIntegrityResponse = {
+  status?: string;
+  last_verified_at?: string;
+  ledger_head?: string;
+  gaps?: number;
+  immutable_events?: number;
+};
+
+type ReviewQueueResponse =
+  | {
+      items?: { case_id?: string; applicant_name?: string; status?: string; risk_level?: string; age_minutes?: number }[];
+      counts?: Record<string, number>;
+    }
+  | { case_id?: string; applicant_name?: string; status?: string; risk_level?: string; age_minutes?: number }[];
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
 
 const caseTypes: { value: CaseType; label: string }[] = [
@@ -160,8 +307,68 @@ const statusClasses: Record<CaseStatus, string> = {
   exported: "border-teal-200 bg-teal-50 text-teal-700",
 };
 
+const defaultIntegrationProfiles: IntegrationProfile[] = [
+  {
+    key: "core_banking",
+    name: "Core Banking CBS",
+    category: "Core ledger",
+    status: "not_configured",
+    mode: "export_profile",
+    destination: "CBS customer master",
+  },
+  {
+    key: "mobile_banking",
+    name: "Mobile Banking KYC",
+    category: "Digital channel",
+    status: "not_configured",
+    mode: "webhook",
+    destination: "Wallet and mobile app onboarding",
+  },
+  {
+    key: "nrb_goaml",
+    name: "NRB / FIU Screening",
+    category: "Regulatory",
+    status: "not_configured",
+    mode: "verification",
+    destination: "Sanctions and adverse media checks",
+  },
+  {
+    key: "document_vault",
+    name: "Document Vault Archive",
+    category: "Records",
+    status: "not_configured",
+    mode: "embedded_review",
+    destination: "Retention and audit evidence",
+  },
+];
+
+function emptyResource<T>(): ResourceState<T> {
+  return { status: "idle", data: null, error: null, updatedAt: null };
+}
+
+function loadingResource<T>(current: ResourceState<T>): ResourceState<T> {
+  return { ...current, status: "loading", error: null };
+}
+
+function readyResource<T>(data: T): ResourceState<T> {
+  return { status: "ready", data, error: null, updatedAt: new Date().toISOString() };
+}
+
+function failedResource<T>(current: ResourceState<T>, error: unknown, fallback: string): ResourceState<T> {
+  return {
+    ...current,
+    status: "error",
+    error: error instanceof Error ? error.message : fallback,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function labelize(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function compactId(value: string) {
+  return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
 }
 
 function formatDate(value: string) {
@@ -177,6 +384,76 @@ function pct(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function optionalPct(value?: number) {
+  if (typeof value !== "number") {
+    return "n/a";
+  }
+  return value <= 1 ? pct(value) : `${Math.round(value)}%`;
+}
+
+function statusTone(status?: string) {
+  const normalized = (status ?? "unknown").toLowerCase();
+  if (["approved", "configured", "ready", "passed", "complete", "verified", "ok", "healthy"].includes(normalized)) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (["review_required", "warning", "pending", "partial", "not_configured", "not configured"].includes(normalized)) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (["rejected", "failed", "error", "blocked", "missing"].includes(normalized)) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (["processing", "running", "loading"].includes(normalized)) {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+  return "border-zinc-200 bg-zinc-50 text-zinc-700";
+}
+
+function normalizeProfiles(data: IntegrationProfilesResponse | null) {
+  if (!data) {
+    return [];
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  return data.profiles ?? data.adapters ?? data.items ?? [];
+}
+
+function profileKey(profile: IntegrationProfile) {
+  return profile.key ?? profile.profile_key ?? "profile";
+}
+
+function profileName(profile: IntegrationProfile) {
+  return profile.name ?? profile.label ?? labelize(profileKey(profile));
+}
+
+function profileStatus(profile: IntegrationProfile) {
+  if (profile.status) {
+    return profile.status;
+  }
+  if (profile.adapter_status) {
+    return profile.adapter_status;
+  }
+  return profile.configured === false ? "not_configured" : "configured";
+}
+
+function packetDocuments(data: SplitPreviewResponse | ClassificationResponse | null) {
+  if (!data) {
+    return [];
+  }
+  return data.documents ?? ("classifications" in data ? data.classifications : undefined) ?? ("pages" in data ? data.pages : undefined) ?? [];
+}
+
+function isKycCase(value: unknown): value is KycCase {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "id" in value &&
+      "case_type" in value &&
+      "documents" in value &&
+      "extracted_fields" in value,
+  );
+}
+
 function blockStyle(block: OcrBlock, page: OcrPage) {
   const [x1, y1, x2, y2] = block.bbox;
   return {
@@ -185,6 +462,16 @@ function blockStyle(block: OcrBlock, page: OcrPage) {
     width: `${((x2 - x1) / page.width) * 100}%`,
     height: `${((y2 - y1) / page.height) * 100}%`,
   };
+}
+
+async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, init);
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    const message = detail ? `${response.status} ${detail.slice(0, 120)}` : `${response.status} ${response.statusText}`;
+    throw new Error(message.trim());
+  }
+  return (await response.json()) as T;
 }
 
 export default function Home() {
@@ -199,7 +486,44 @@ export default function Home() {
   const [manifest, setManifest] = useState<IntegrationManifest | null>(null);
   const [message, setMessage] = useState("Starting");
   const [busy, setBusy] = useState(false);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
   const [exportJson, setExportJson] = useState("");
+  const [profileKeySelection, setProfileKeySelection] = useState("core_banking");
+  const [intelligence, setIntelligence] = useState<ResourceState<CaseIntelligence>>(() =>
+    emptyResource<CaseIntelligence>(),
+  );
+  const [splitPreview, setSplitPreview] = useState<ResourceState<SplitPreviewResponse>>(() =>
+    emptyResource<SplitPreviewResponse>(),
+  );
+  const [classification, setClassification] = useState<ResourceState<ClassificationResponse>>(() =>
+    emptyResource<ClassificationResponse>(),
+  );
+  const [validationResult, setValidationResult] = useState<ResourceState<ValidationResponse>>(() =>
+    emptyResource<ValidationResponse>(),
+  );
+  const [verification, setVerification] = useState<ResourceState<VerificationResponse>>(() =>
+    emptyResource<VerificationResponse>(),
+  );
+  const [profiles, setProfiles] = useState<ResourceState<IntegrationProfilesResponse>>(() =>
+    emptyResource<IntegrationProfilesResponse>(),
+  );
+  const [webhookTest, setWebhookTest] = useState<ResourceState<WebhookTestResponse>>(() =>
+    emptyResource<WebhookTestResponse>(),
+  );
+  const [reviewLink, setReviewLink] = useState<ResourceState<EmbeddedReviewLinkResponse>>(() =>
+    emptyResource<EmbeddedReviewLinkResponse>(),
+  );
+  const [profileExport, setProfileExport] = useState<ResourceState<unknown>>(() => emptyResource<unknown>());
+  const [tenant, setTenant] = useState<ResourceState<TenantAdminResponse>>(() =>
+    emptyResource<TenantAdminResponse>(),
+  );
+  const [rbac, setRbac] = useState<ResourceState<RbacResponse>>(() => emptyResource<RbacResponse>());
+  const [auditIntegrity, setAuditIntegrity] = useState<ResourceState<AuditIntegrityResponse>>(() =>
+    emptyResource<AuditIntegrityResponse>(),
+  );
+  const [reviewQueue, setReviewQueue] = useState<ResourceState<ReviewQueueResponse>>(() =>
+    emptyResource<ReviewQueueResponse>(),
+  );
 
   const selectedCase = useMemo(
     () => cases.find((item) => item.id === selectedId) ?? cases[0] ?? null,
@@ -208,6 +532,16 @@ export default function Home() {
 
   const selectedDocument = selectedCase?.documents[0] ?? null;
   const selectedPage = selectedDocument?.pages[0] ?? null;
+  const configuredProfiles = useMemo(() => normalizeProfiles(profiles.data), [profiles.data]);
+  const visibleProfiles = configuredProfiles.length ? configuredProfiles : defaultIntegrationProfiles;
+  const selectedProfile =
+    visibleProfiles.find((profile) => profileKey(profile) === profileKeySelection) ?? visibleProfiles[0];
+  const queueItems = useMemo(() => {
+    if (!reviewQueue.data) {
+      return [];
+    }
+    return Array.isArray(reviewQueue.data) ? reviewQueue.data : reviewQueue.data.items ?? [];
+  }, [reviewQueue.data]);
 
   const metrics = useMemo(
     () => ({
@@ -215,31 +549,95 @@ export default function Home() {
       review: cases.filter((item) => item.status === "review_required").length,
       approved: cases.filter((item) => item.status === "approved").length,
       documents: cases.reduce((total, item) => total + item.documents.length, 0),
+      highRisk: cases.filter((item) => item.risk_level?.toLowerCase() === "high").length,
     }),
     [cases],
   );
 
+  const mergeCase = useCallback((updated: KycCase) => {
+    setCases((current) => {
+      const exists = current.some((item) => item.id === updated.id);
+      return exists ? current.map((item) => (item.id === updated.id ? updated : item)) : [updated, ...current];
+    });
+    setSelectedId(updated.id);
+  }, []);
+
+  const mergeCaseFromPayload = useCallback(
+    (payload: unknown) => {
+      if (isKycCase(payload)) {
+        mergeCase(payload);
+        return;
+      }
+      if (payload && typeof payload === "object" && "case" in payload && isKycCase(payload.case)) {
+        mergeCase(payload.case);
+      }
+    },
+    [mergeCase],
+  );
+
+  const loadPlatformContext = useCallback(async () => {
+    setProfiles((current) => loadingResource(current));
+    setTenant((current) => loadingResource(current));
+    setRbac((current) => loadingResource(current));
+    setAuditIntegrity((current) => loadingResource(current));
+    setReviewQueue((current) => loadingResource(current));
+
+    await Promise.allSettled([
+      apiJson<IntegrationProfilesResponse>("/api/integrations/profiles", { cache: "no-store" })
+        .then((data) => setProfiles(readyResource(data)))
+        .catch((error) =>
+          setProfiles((current) => failedResource(current, error, "Integration profiles unavailable")),
+        ),
+      apiJson<TenantAdminResponse>("/api/admin/tenant", { cache: "no-store" })
+        .then((data) => setTenant(readyResource(data)))
+        .catch((error) => setTenant((current) => failedResource(current, error, "Tenant controls unavailable"))),
+      apiJson<RbacResponse>("/api/admin/rbac", { cache: "no-store" })
+        .then((data) => setRbac(readyResource(data)))
+        .catch((error) => setRbac((current) => failedResource(current, error, "RBAC unavailable"))),
+      apiJson<AuditIntegrityResponse>("/api/admin/audit-integrity", { cache: "no-store" })
+        .then((data) => setAuditIntegrity(readyResource(data)))
+        .catch((error) =>
+          setAuditIntegrity((current) => failedResource(current, error, "Audit integrity unavailable")),
+        ),
+      apiJson<ReviewQueueResponse>("/api/review/queue", { cache: "no-store" })
+        .then((data) => setReviewQueue(readyResource(data)))
+        .catch((error) => setReviewQueue((current) => failedResource(current, error, "Review queue unavailable"))),
+    ]);
+  }, []);
+
+  const loadCaseIntelligence = useCallback(async (caseId: string) => {
+    setIntelligence((current) => loadingResource(current));
+    try {
+      const data = await apiJson<CaseIntelligence>(`/api/cases/${caseId}/intelligence`, { cache: "no-store" });
+      setIntelligence(readyResource(data));
+    } catch (error) {
+      setIntelligence((current) => failedResource(current, error, "Checklist intelligence unavailable"));
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     setMessage("Syncing");
     try {
-      const [caseResponse, aiResponse, manifestResponse] = await Promise.all([
-        fetch(`${API_BASE}/api/cases`, { cache: "no-store" }),
-        fetch(`${API_BASE}/api/ai/health`, { cache: "no-store" }),
-        fetch(`${API_BASE}/api/integrations/manifest`, { cache: "no-store" }),
-      ]);
-      if (!caseResponse.ok) {
-        throw new Error("Case API unavailable");
-      }
-      const data = (await caseResponse.json()) as KycCase[];
+      const data = await apiJson<KycCase[]>("/api/cases", { cache: "no-store" });
       setCases(data);
       setSelectedId((current) => current ?? data[0]?.id ?? null);
-      setAiHealth((await aiResponse.json()) as AiHealth);
-      setManifest((await manifestResponse.json()) as IntegrationManifest);
       setMessage("Connected");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Backend unavailable");
     }
-  }, []);
+
+    const [aiResult, manifestResult] = await Promise.allSettled([
+      apiJson<AiHealth>("/api/ai/health", { cache: "no-store" }),
+      apiJson<IntegrationManifest>("/api/integrations/manifest", { cache: "no-store" }),
+    ]);
+    if (aiResult.status === "fulfilled") {
+      setAiHealth(aiResult.value);
+    }
+    if (manifestResult.status === "fulfilled") {
+      setManifest(manifestResult.value);
+    }
+    void loadPlatformContext();
+  }, [loadPlatformContext]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -247,6 +645,63 @@ export default function Home() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!visibleProfiles.some((profile) => profileKey(profile) === profileKeySelection)) {
+      setProfileKeySelection(profileKey(visibleProfiles[0]));
+    }
+  }, [profileKeySelection, visibleProfiles]);
+
+  useEffect(() => {
+    const caseId = selectedCase?.id;
+    setSplitPreview(emptyResource<SplitPreviewResponse>());
+    setClassification(emptyResource<ClassificationResponse>());
+    setValidationResult(emptyResource<ValidationResponse>());
+    setVerification(emptyResource<VerificationResponse>());
+    setWebhookTest(emptyResource<WebhookTestResponse>());
+    setReviewLink(emptyResource<EmbeddedReviewLinkResponse>());
+    setProfileExport(emptyResource<unknown>());
+    if (!caseId) {
+      setIntelligence(emptyResource<CaseIntelligence>());
+      return;
+    }
+    void loadCaseIntelligence(caseId);
+  }, [loadCaseIntelligence, selectedCase?.id]);
+
+  async function runCaseEndpoint<T>(
+    actionKey: string,
+    label: string,
+    path: string,
+    setter: Dispatch<SetStateAction<ResourceState<T>>>,
+    body: Record<string, unknown> = {},
+  ) {
+    if (!selectedCase) {
+      return null;
+    }
+    setBusy(true);
+    setActiveAction(actionKey);
+    setMessage(label);
+    setter((current) => loadingResource(current));
+    try {
+      const data = await apiJson<T>(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      setter(readyResource(data));
+      mergeCaseFromPayload(data);
+      void loadPlatformContext();
+      setMessage(`${label} complete`);
+      return data;
+    } catch (error) {
+      setter((current) => failedResource(current, error, `${label} failed`));
+      setMessage(error instanceof Error ? error.message : `${label} failed`);
+      return null;
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
 
   async function createCase(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -272,6 +727,7 @@ export default function Home() {
       setSelectedId(created.id);
       setExportJson("");
       setMessage("Case created");
+      void loadPlatformContext();
       return created;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Case creation failed");
@@ -300,6 +756,8 @@ export default function Home() {
       setCases((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setSelectedId(updated.id);
       setMessage("Document processed");
+      void loadCaseIntelligence(updated.id);
+      void loadPlatformContext();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Document processing failed");
     } finally {
@@ -351,6 +809,7 @@ export default function Home() {
       const updated = (await response.json()) as KycCase;
       setCases((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setMessage("Approved");
+      void loadPlatformContext();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Approval failed");
     } finally {
@@ -362,6 +821,8 @@ export default function Home() {
     if (!selectedCase) {
       return;
     }
+    setBusy(true);
+    setActiveAction("export-json");
     setMessage("Exporting");
     try {
       const response = await fetch(`${API_BASE}/api/cases/${selectedCase.id}/export`);
@@ -370,21 +831,164 @@ export default function Home() {
       }
       setExportJson(JSON.stringify(await response.json(), null, 2));
       setMessage("Export ready");
+      void loadPlatformContext();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Export failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
     }
   }
+
+  async function runSplitPreview() {
+    if (!selectedCase) {
+      return;
+    }
+    await runCaseEndpoint<SplitPreviewResponse>(
+      "split-preview",
+      "Building split preview",
+      `/api/cases/${selectedCase.id}/split-preview`,
+      setSplitPreview,
+      { profile_key: profileKeySelection },
+    );
+  }
+
+  async function runClassify() {
+    if (!selectedCase) {
+      return;
+    }
+    await runCaseEndpoint<ClassificationResponse>(
+      "classify",
+      "Classifying packet",
+      `/api/cases/${selectedCase.id}/classify`,
+      setClassification,
+      { institution_id: selectedCase.institution_id, branch_code: selectedCase.branch_code ?? "KTM-001" },
+    );
+  }
+
+  async function runValidate() {
+    if (!selectedCase) {
+      return;
+    }
+    await runCaseEndpoint<ValidationResponse>(
+      "validate",
+      "Running validation",
+      `/api/cases/${selectedCase.id}/validate`,
+      setValidationResult,
+      { policy: "nepal_financial_institution_kyc" },
+    );
+  }
+
+  async function runVerification() {
+    if (!selectedCase) {
+      return;
+    }
+    await runCaseEndpoint<VerificationResponse>(
+      "verification",
+      "Running advanced verification",
+      `/api/cases/${selectedCase.id}/verification/run`,
+      setVerification,
+      { profile_key: profileKeySelection, jurisdiction: "NP", branch_code: selectedCase.branch_code ?? "KTM-001" },
+    );
+  }
+
+  async function testWebhook() {
+    setBusy(true);
+    setActiveAction("webhook-test");
+    setMessage("Testing webhook");
+    setWebhookTest((current) => loadingResource(current));
+    try {
+      const data = await apiJson<WebhookTestResponse>("/api/integrations/webhook/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          case_id: selectedCase?.id,
+          profile_key: profileKeySelection,
+          event: "kyc.case.review_required",
+        }),
+      });
+      setWebhookTest(readyResource(data));
+      setMessage("Webhook test complete");
+    } catch (error) {
+      setWebhookTest((current) => failedResource(current, error, "Webhook test failed"));
+      setMessage(error instanceof Error ? error.message : "Webhook test failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function createEmbeddedReviewLink() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("review-link");
+    setMessage("Creating review link");
+    setReviewLink((current) => loadingResource(current));
+    try {
+      const data = await apiJson<EmbeddedReviewLinkResponse>(
+        `/api/cases/${selectedCase.id}/embedded-review-link`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile_key: profileKeySelection, role: "checker" }),
+        },
+      );
+      setReviewLink(readyResource(data));
+      setMessage("Review link ready");
+    } catch (error) {
+      setReviewLink((current) => failedResource(current, error, "Review link failed"));
+      setMessage(error instanceof Error ? error.message : "Review link failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function exportProfile() {
+    if (!selectedCase) {
+      return;
+    }
+    setBusy(true);
+    setActiveAction("export-profile");
+    setMessage("Exporting profile");
+    setProfileExport((current) => loadingResource(current));
+    try {
+      const data = await apiJson<unknown>(
+        `/api/cases/${selectedCase.id}/export-profile/${encodeURIComponent(profileKeySelection)}`,
+        { cache: "no-store" },
+      );
+      setProfileExport(readyResource(data));
+      setExportJson(JSON.stringify(data, null, 2));
+      setMessage("Export profile ready");
+    } catch (error) {
+      setProfileExport((current) => failedResource(current, error, "Export profile failed"));
+      setMessage(error instanceof Error ? error.message : "Export profile failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  const checklistItems = intelligence.data?.checklist ?? [];
+  const policySignals = intelligence.data?.policy_signals ?? [];
+  const splitDocuments = packetDocuments(splitPreview.data);
+  const classifiedDocuments = packetDocuments(classification.data);
+  const validationFindings = validationResult.data?.findings ?? selectedCase?.validation_findings ?? [];
+  const verificationChecks = verification.data?.checks ?? [];
+  const reviewUrl = reviewLink.data?.url ?? reviewLink.data?.review_url ?? "";
+  const selectedProfileStatus = selectedProfile ? profileStatus(selectedProfile) : "not_configured";
+  const reviewCounts = reviewQueue.data && !Array.isArray(reviewQueue.data) ? reviewQueue.data.counts : undefined;
 
   return (
     <main className="min-h-screen bg-[#f6f7f8] text-zinc-950">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-[1540px] flex-col gap-4 px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-              LipiOCR Enterprise
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">LipiOCR Enterprise</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">
-              Nepal KYC Document Intelligence
+              Nepal FI KYC Command Center
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -392,9 +996,9 @@ export default function Home() {
               <Activity size={16} />
               {message}
             </span>
-            <span className="inline-flex h-9 items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 font-medium text-blue-700">
+            <span className="inline-flex h-9 max-w-full items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 font-medium text-blue-700">
               <Network size={16} />
-              {aiHealth?.model ?? "gemma-4-26b-4bit"}
+              <span className="truncate">{aiHealth?.model ?? "gemma-4-26b-4bit"}</span>
             </span>
             <button
               className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 font-medium hover:bg-zinc-50"
@@ -547,9 +1151,10 @@ export default function Home() {
         </aside>
 
         <section className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Metric icon={<Building2 size={18} />} label="Cases" value={metrics.cases} />
             <Metric icon={<ClipboardCheck size={18} />} label="Review" value={metrics.review} />
+            <Metric icon={<AlertTriangle size={18} />} label="High Risk" value={metrics.highRisk} />
             <Metric icon={<BadgeCheck size={18} />} label="Approved" value={metrics.approved} />
             <Metric icon={<FileSearch size={18} />} label="Documents" value={metrics.documents} />
           </div>
@@ -681,62 +1286,334 @@ export default function Home() {
             </section>
 
             <section className="space-y-4">
-              <Panel title="Validation Findings" icon={<ClipboardCheck size={16} />}>
-                {selectedCase?.validation_findings.length ? (
-                  <div className="space-y-2">
-                    {selectedCase.validation_findings.map((finding, index) => (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm" key={index}>
-                        <p className="font-semibold text-amber-800">{finding.code}</p>
-                        <p className="mt-1 text-amber-700">{finding.message}</p>
-                      </div>
-                    ))}
+              <Panel title="Checklist Intelligence" icon={<Fingerprint size={16} />}>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <Info label="Complete" value={optionalPct(intelligence.data?.completeness_score)} />
+                    <Info label="Risk" value={optionalPct(intelligence.data?.risk_score)} />
+                    <Info
+                      label="Updated"
+                      value={intelligence.updatedAt ? formatDate(intelligence.updatedAt) : intelligence.status}
+                    />
                   </div>
-                ) : (
-                  <p className="text-sm text-zinc-500">No findings yet</p>
-                )}
-              </Panel>
-
-              <Panel title="Integration" icon={<Network size={16} />}>
-                <div className="space-y-3 text-sm">
-                  <Info label="Modes" value={manifest?.modes.join(", ") ?? "Loading"} />
-                  <Info label="Events" value={manifest?.events.slice(0, 4).join(", ") ?? "Loading"} />
-                  <Info
-                    label="Gemma"
-                    value={`${aiHealth?.provider ?? "vllm"} · ${aiHealth?.enabled ? "remote enabled" : "local fallback"}`}
-                  />
+                  <ResourceError resource={intelligence} />
+                  <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm leading-relaxed text-zinc-700">
+                    {intelligence.data?.summary ??
+                      (intelligence.status === "loading"
+                        ? "Loading KYC checklist intelligence."
+                        : "Checklist intelligence has not returned for this case.")}
+                  </p>
+                  <div className="max-h-56 space-y-2 overflow-auto pr-1">
+                    {checklistItems.length ? (
+                      checklistItems.map((item, index) => (
+                        <div
+                          className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs"
+                          key={item.id ?? item.key ?? `${item.title ?? item.label}-${index}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">{item.title ?? item.label ?? item.key}</p>
+                            <p className="mt-1 truncate text-zinc-500">{item.message ?? item.evidence ?? "Ready"}</p>
+                          </div>
+                          <StatusBadge status={item.status ?? item.severity} />
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-zinc-500">No checklist items yet</p>
+                    )}
+                  </div>
+                  {policySignals.length ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {policySignals.slice(0, 4).map((signal, index) => (
+                        <div className="min-w-0 rounded-md bg-zinc-50 p-2 text-xs" key={`${signal.key ?? signal.label}-${index}`}>
+                          <p className="truncate font-semibold">{signal.label ?? signal.title ?? signal.key}</p>
+                          <p className="mt-1 truncate text-zinc-500">{signal.message ?? signal.category ?? "Policy signal"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </Panel>
 
-              <Panel title="Audit" icon={<History size={16} />}>
-                {selectedCase?.audit_events.length ? (
-                  <ol className="space-y-3">
-                    {selectedCase.audit_events.map((event, index) => (
-                      <li className="grid grid-cols-[88px_1fr] gap-3 text-xs" key={`${event.action}-${index}`}>
-                        <span className="font-mono text-zinc-500">{formatDate(event.created_at)}</span>
-                        <span>
-                          <span className="block font-semibold">{event.action}</span>
-                          <span className="block text-zinc-500">{event.actor}</span>
-                        </span>
-                      </li>
+              <Panel title="Document Packet / Classification" icon={<FileStack size={16} />}>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <ActionButton
+                      busy={activeAction === "split-preview"}
+                      disabled={busy || !selectedCase}
+                      icon={<SplitSquareHorizontal size={14} />}
+                      onClick={runSplitPreview}
+                    >
+                      Split Preview
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "classify"}
+                      disabled={busy || !selectedCase}
+                      icon={<FileSearch size={14} />}
+                      onClick={runClassify}
+                      tone="primary"
+                    >
+                      Classify
+                    </ActionButton>
+                  </div>
+                  <ResourceError resource={splitPreview} />
+                  <ResourceError resource={classification} />
+                  <div className="space-y-2">
+                    {(selectedCase?.documents ?? []).map((document) => (
+                      <div
+                        className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs"
+                        key={document.id}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">{document.filename}</p>
+                          <p className="mt-1 truncate text-zinc-500">
+                            {labelize(document.declared_document_type)} declared · {document.page_count} pages
+                          </p>
+                        </div>
+                        <StatusBadge status={document.document_type} />
+                      </div>
                     ))}
-                  </ol>
-                ) : (
-                  <p className="text-sm text-zinc-500">No audit events</p>
-                )}
+                    {!selectedCase?.documents.length ? <p className="text-sm text-zinc-500">No packet documents yet</p> : null}
+                  </div>
+                  {splitDocuments.length || classifiedDocuments.length ? (
+                    <div className="grid gap-2">
+                      {[...splitDocuments, ...classifiedDocuments].slice(0, 6).map((document, index) => (
+                        <div
+                          className="grid grid-cols-[1fr_72px] gap-3 rounded-md bg-zinc-50 p-2 text-xs"
+                          key={`${document.id ?? document.filename ?? document.document_type}-${index}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">
+                              {labelize(document.document_type ?? document.declared_document_type ?? "unknown")}
+                            </p>
+                            <p className="mt-1 truncate text-zinc-500">
+                              {document.filename ?? document.reason ?? `${document.page_count ?? document.pages?.length ?? 0} pages`}
+                            </p>
+                          </div>
+                          <span className="self-center rounded-md bg-white px-2 py-1 text-center font-mono">
+                            {optionalPct(document.confidence)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </Panel>
+
+              <Panel title="Advanced Verification" icon={<Zap size={16} />}>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <ActionButton
+                      busy={activeAction === "validate"}
+                      disabled={busy || !selectedCase}
+                      icon={<ClipboardCheck size={14} />}
+                      onClick={runValidate}
+                    >
+                      Validate
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "verification"}
+                      disabled={busy || !selectedCase}
+                      icon={<Play size={14} />}
+                      onClick={runVerification}
+                      tone="primary"
+                    >
+                      Verify
+                    </ActionButton>
+                  </div>
+                  <ResourceError resource={validationResult} />
+                  <ResourceError resource={verification} />
+                  <div className="grid grid-cols-3 gap-2">
+                    <Info label="Decision" value={verification.data?.decision ?? validationResult.data?.status ?? "pending"} />
+                    <Info label="Score" value={optionalPct(verification.data?.score)} />
+                    <Info label="Run" value={verification.data?.run_id ? compactId(verification.data.run_id) : "none"} />
+                  </div>
+                  <div className="max-h-52 space-y-2 overflow-auto pr-1">
+                    {validationFindings.length ? (
+                      validationFindings.map((finding, index) => (
+                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs" key={`${finding.code}-${index}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 truncate font-semibold text-amber-900">{finding.code}</p>
+                            <StatusBadge status={finding.severity} />
+                          </div>
+                          <p className="mt-1 truncate text-amber-800">{finding.message}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-zinc-500">No validation findings yet</p>
+                    )}
+                    {verificationChecks.map((check, index) => (
+                      <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={`${check.key ?? check.label}-${index}`}>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">{check.label ?? check.title ?? check.key}</p>
+                          <p className="mt-1 truncate text-zinc-500">{check.message ?? check.evidence ?? "Verification check"}</p>
+                        </div>
+                        <StatusBadge status={check.status ?? check.severity} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Panel>
+
+              <Panel title="Integrations" icon={<Plug size={16} />}>
+                <div className="space-y-3">
+                  <ResourceError resource={profiles} />
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <select
+                      className="h-9 min-w-0 rounded-md border border-zinc-300 bg-white px-2 text-xs font-semibold outline-none focus:border-teal-600"
+                      value={profileKeySelection}
+                      onChange={(event) => setProfileKeySelection(event.target.value)}
+                    >
+                      {visibleProfiles.map((profile) => (
+                        <option key={profileKey(profile)} value={profileKey(profile)}>
+                          {profileName(profile)}
+                        </option>
+                      ))}
+                    </select>
+                    <StatusBadge status={selectedProfileStatus} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Info label="Modes" value={manifest?.modes.slice(0, 3).join(", ") ?? "loading"} />
+                    <Info label="Events" value={manifest?.events.slice(0, 3).join(", ") ?? "loading"} />
+                  </div>
+                  <div className="max-h-48 space-y-2 overflow-auto pr-1">
+                    {visibleProfiles.map((profile) => (
+                      <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs" key={profileKey(profile)}>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">{profileName(profile)}</p>
+                          <p className="mt-1 truncate text-zinc-500">
+                            {profile.category ?? profile.mode ?? "External adapter"} · {profile.destination ?? "Nepal FI channel"}
+                          </p>
+                        </div>
+                        <StatusBadge status={profileStatus(profile)} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <ActionButton
+                      busy={activeAction === "webhook-test"}
+                      disabled={busy}
+                      icon={<Network size={14} />}
+                      onClick={testWebhook}
+                    >
+                      Webhook
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "review-link"}
+                      disabled={busy || !selectedCase}
+                      icon={<Link2 size={14} />}
+                      onClick={createEmbeddedReviewLink}
+                    >
+                      Review Link
+                    </ActionButton>
+                    <ActionButton
+                      busy={activeAction === "export-profile"}
+                      disabled={busy || !selectedCase}
+                      icon={<Download size={14} />}
+                      onClick={exportProfile}
+                      tone="primary"
+                    >
+                      Export
+                    </ActionButton>
+                  </div>
+                  <ResourceError resource={webhookTest} />
+                  <ResourceError resource={reviewLink} />
+                  <ResourceError resource={profileExport} />
+                  {webhookTest.data ? (
+                    <div className="rounded-md bg-zinc-50 p-2 text-xs">
+                      <span className="font-semibold">{webhookTest.data.status ?? "webhook_result"}</span>
+                      <span className="ml-2 font-mono text-zinc-500">{webhookTest.data.event_id ?? webhookTest.data.message}</span>
+                    </div>
+                  ) : null}
+                  {reviewUrl ? (
+                    <div className="rounded-md bg-zinc-950 p-2 font-mono text-xs text-zinc-50">
+                      <p className="truncate">{reviewUrl}</p>
+                      <p className="mt-1 text-zinc-400">{reviewLink.data?.expires_at ?? "no expiry returned"}</p>
+                    </div>
+                  ) : null}
+                </div>
+              </Panel>
+
+              <Panel title="Enterprise Controls" icon={<KeyRound size={16} />}>
+                <div className="space-y-3">
+                  <ResourceError resource={tenant} />
+                  <ResourceError resource={rbac} />
+                  <ResourceError resource={auditIntegrity} />
+                  <ResourceError resource={reviewQueue} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Info label="Tenant" value={tenant.data?.institution_name ?? tenant.data?.tenant_key ?? "Nepal FI demo"} />
+                    <Info label="Residency" value={tenant.data?.data_residency ?? "NP"} />
+                    <Info label="RBAC Users" value={`${rbac.data?.active_users ?? 0}`} />
+                    <Info label="Retention" value={tenant.data?.retention_days ? `${tenant.data.retention_days} days` : "policy"} />
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">Maker-checker controls</p>
+                      <p className="mt-1 truncate text-zinc-500">
+                        {(rbac.data?.roles ?? []).map((role) => role.name).filter(Boolean).slice(0, 3).join(", ") || "Roles pending"}
+                      </p>
+                    </div>
+                    <StatusBadge status={rbac.data?.maker_checker ? "configured" : "not_configured"} />
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md border border-zinc-200 p-3 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">Audit integrity ledger</p>
+                      <p className="mt-1 truncate font-mono text-zinc-500">
+                        {auditIntegrity.data?.ledger_head ? compactId(auditIntegrity.data.ledger_head) : "ledger pending"}
+                      </p>
+                    </div>
+                    <StatusBadge status={auditIntegrity.data?.status ?? "unknown"} />
+                  </div>
+                  {reviewCounts ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {Object.entries(reviewCounts)
+                        .slice(0, 3)
+                        .map(([key, value]) => (
+                          <div className="rounded-md bg-zinc-50 p-2 text-xs" key={key}>
+                            <p className="truncate font-semibold">{labelize(key)}</p>
+                            <p className="mt-1 font-mono text-lg">{value}</p>
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                  <div className="max-h-36 space-y-2 overflow-auto pr-1">
+                    {queueItems.slice(0, 4).map((item) => (
+                      <div className="grid grid-cols-[1fr_auto] gap-3 rounded-md bg-zinc-50 p-2 text-xs" key={item.case_id ?? item.applicant_name}>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">{item.applicant_name ?? item.case_id}</p>
+                          <p className="mt-1 truncate text-zinc-500">{item.age_minutes ?? 0} min · {item.risk_level ?? "risk pending"}</p>
+                        </div>
+                        <StatusBadge status={item.status} />
+                      </div>
+                    ))}
+                    {!queueItems.length ? <p className="text-sm text-zinc-500">No queue items returned</p> : null}
+                  </div>
+                  {selectedCase?.audit_events.length ? (
+                    <ol className="space-y-2 border-t border-zinc-200 pt-3">
+                      {selectedCase.audit_events.slice(0, 4).map((event, index) => (
+                        <li className="grid grid-cols-[82px_1fr] gap-3 text-xs" key={`${event.action}-${index}`}>
+                          <span className="font-mono text-zinc-500">{formatDate(event.created_at)}</span>
+                          <span className="min-w-0">
+                            <span className="block truncate font-semibold">{event.action}</span>
+                            <span className="block truncate text-zinc-500">{event.actor}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
               </Panel>
 
               <Panel
-                title="Export"
+                title="Export Payload"
                 icon={
-                  <button
-                    className="inline-flex h-8 items-center gap-2 rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-semibold hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!selectedCase}
+                  <ActionButton
+                    busy={activeAction === "export-json"}
+                    disabled={busy || !selectedCase}
+                    icon={<Download size={14} />}
                     onClick={exportCase}
-                    type="button"
                   >
-                    <Download size={14} />
                     JSON
-                  </button>
+                  </ActionButton>
                 }
               >
                 <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-zinc-50">
@@ -780,6 +1657,57 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-semibold uppercase tracking-[0.1em] text-zinc-500">{label}</p>
       <p className="mt-1 truncate text-sm font-medium text-zinc-900">{value}</p>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  return (
+    <span className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 text-xs font-semibold ${statusTone(status)}`}>
+      <span className="truncate">{labelize(status ?? "unknown")}</span>
+    </span>
+  );
+}
+
+function ResourceError<T>({ resource }: { resource: ResourceState<T> }) {
+  if (resource.status !== "error") {
+    return null;
+  }
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+      <AlertTriangle className="mt-0.5 shrink-0" size={14} />
+      <p className="min-w-0 break-words">{resource.error}</p>
+    </div>
+  );
+}
+
+function ActionButton({
+  busy,
+  children,
+  icon,
+  tone = "secondary",
+  ...props
+}: {
+  busy?: boolean;
+  children: React.ReactNode;
+  icon: React.ReactNode;
+  tone?: "primary" | "secondary";
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const toneClass =
+    tone === "primary"
+      ? "border-teal-700 bg-teal-700 text-white hover:bg-teal-800"
+      : "border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50";
+  return (
+    <button
+      {...props}
+      className={`inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-md border px-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${toneClass} ${
+        props.className ?? ""
+      }`}
+      disabled={props.disabled || busy}
+      type={props.type ?? "button"}
+    >
+      {busy ? <Loader2 className="shrink-0 animate-spin" size={14} /> : <span className="shrink-0">{icon}</span>}
+      <span className="truncate">{children}</span>
+    </button>
   );
 }
 

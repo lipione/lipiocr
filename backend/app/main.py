@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import Body, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -83,6 +83,51 @@ def integration_manifest():
     }
 
 
+@app.get("/api/integrations/profiles")
+def integration_profiles():
+    from app.services.integrations import list_integration_profiles
+
+    return list_integration_profiles()
+
+
+@app.post("/api/integrations/webhook/test")
+def integration_webhook_test(request: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.integrations import build_webhook_test_payload
+
+    case_id = str(request.get("case_id", ""))
+    event = str(request.get("event", "case.approved"))
+    case = repository.get_case(case_id)
+    return build_webhook_test_payload(case=case, event=event)
+
+
+@app.get("/api/admin/tenant")
+def tenant_profile():
+    from app.services.enterprise_controls import build_tenant_profile
+
+    return build_tenant_profile(settings)
+
+
+@app.get("/api/admin/rbac")
+def rbac_matrix():
+    from app.services.enterprise_controls import build_rbac_matrix
+
+    return build_rbac_matrix()
+
+
+@app.get("/api/admin/audit-integrity")
+def audit_integrity():
+    from app.services.enterprise_controls import build_audit_integrity_summary
+
+    return build_audit_integrity_summary(repository.list_cases())
+
+
+@app.get("/api/review/queue")
+def review_queue():
+    from app.services.enterprise_controls import build_review_queue
+
+    return build_review_queue(repository.list_cases())
+
+
 @app.post("/api/cases", status_code=201)
 def create_case(request: CaseCreateRequest):
     case = KycCase(
@@ -111,6 +156,64 @@ def list_cases():
 @app.get("/api/cases/{case_id}")
 def get_case(case_id: str):
     return repository.get_case(case_id)
+
+
+@app.get("/api/cases/{case_id}/intelligence")
+def case_intelligence(case_id: str):
+    from app.services.kyc_intelligence import build_case_intelligence
+
+    return build_case_intelligence(repository.get_case(case_id))
+
+
+@app.post("/api/cases/{case_id}/split-preview")
+def case_split_preview(case_id: str):
+    from app.services.kyc_intelligence import build_split_preview
+
+    return build_split_preview(repository.get_case(case_id))
+
+
+@app.post("/api/cases/{case_id}/classify")
+def classify_case(case_id: str):
+    from app.services.kyc_intelligence import classify_case_documents
+
+    case = repository.get_case(case_id)
+    result = classify_case_documents(case)
+    repository.save_case(case)
+    return result
+
+
+@app.post("/api/cases/{case_id}/validate")
+def validate_case(case_id: str):
+    from app.services.kyc_intelligence import validate_case_consistency
+
+    case = repository.get_case(case_id)
+    result = validate_case_consistency(case)
+    repository.save_case(case)
+    return result
+
+
+@app.post("/api/cases/{case_id}/embedded-review-link")
+def embedded_review_link(case_id: str):
+    from app.services.integrations import build_embedded_review_link
+
+    return build_embedded_review_link(repository.get_case(case_id), settings)
+
+
+@app.get("/api/cases/{case_id}/export-profile/{profile_key}")
+def export_profile(case_id: str, profile_key: str):
+    from app.services.integrations import build_export_profile
+
+    return build_export_profile(repository.get_case(case_id), profile_key)
+
+
+@app.post("/api/cases/{case_id}/verification/run")
+def verification_run(case_id: str):
+    from app.services.advanced_verification import run_verification
+
+    case = repository.get_case(case_id)
+    result = run_verification(case, repository.list_cases())
+    repository.save_case(case)
+    return result
 
 
 @app.post("/api/cases/{case_id}/documents", status_code=201)

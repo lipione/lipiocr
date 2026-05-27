@@ -7,7 +7,11 @@ LipiOCR Enterprise is a Nepal-focused KYC and financial document intelligence pl
 - Case-based FastAPI backend for KYC/KYB/document processing.
 - Full-page OCR evidence model with blocks, bounding boxes, confidence, and page references.
 - Gemma 4 26B reasoning client for OpenAI-compatible vLLM endpoints.
-- Enterprise review console for case creation, document upload, evidence inspection, validation findings, approval, audit, and JSON export.
+- Enterprise review console for case creation, document upload, evidence inspection, checklist intelligence, validation findings, approval, audit, verification, and JSON export.
+- Nepal KYC intelligence APIs for individual KYC, business KYB, loan onboarding, and document digitization readiness.
+- Integration kit APIs for REST, signed webhooks, SFTP-ready batch delivery, embedded review links, and CBS/LOS/AML export profiles.
+- Enterprise controls APIs for tenant policy, branch controls, RBAC, maker-checker queue, retention posture, and audit hash-chain summaries.
+- Provider-neutral advanced verification interfaces for National ID/PAN registry, AML/sanctions, face/liveness, tamper signals, signature/photo presence, and duplicate detection.
 - Docker deployment shape for `/data/lipiocr` with API, frontend, Postgres, Redis, and MinIO.
 
 ## Architecture
@@ -20,9 +24,36 @@ backend/ FastAPI KYC workflow API
         |
         +-- Full-page OCR evidence model
         +-- Gemma 4 26B reasoning layer
-        +-- Nepal KYC/KYB validation and review workflow
-        +-- Integration-ready export API
+        +-- Nepal KYC/KYB intelligence, validation, and review workflow
+        +-- Integration kit and export profiles
+        +-- Enterprise controls and verification adapters
 ```
+
+## Enterprise API Surface
+
+Core case flow:
+
+- `POST /api/cases`
+- `POST /api/cases/{case_id}/documents`
+- `GET /api/cases/{case_id}/intelligence`
+- `POST /api/cases/{case_id}/split-preview`
+- `POST /api/cases/{case_id}/classify`
+- `POST /api/cases/{case_id}/validate`
+- `POST /api/cases/{case_id}/verification/run`
+- `PATCH /api/cases/{case_id}/review`
+- `GET /api/cases/{case_id}/export-profile/{profile_key}`
+
+Institution integration and controls:
+
+- `GET /api/integrations/profiles`
+- `POST /api/integrations/webhook/test`
+- `POST /api/cases/{case_id}/embedded-review-link`
+- `GET /api/admin/tenant`
+- `GET /api/admin/rbac`
+- `GET /api/admin/audit-integrity`
+- `GET /api/review/queue`
+
+External systems that require real institution credentials return explicit `not_configured` states instead of pretending to verify live National ID, PAN, AML, liveness, or SFTP connections.
 
 ## Run Locally
 
