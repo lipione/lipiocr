@@ -57,14 +57,16 @@ def build_pages_from_upload(
 
     if ocr_provider is not None and source_path is not None:
         observations = ocr_provider.read(source_path, document_type)
-        lines = [
-            (
-                str(observation.get("text") or "").strip(),
-                float(observation.get("confidence") or 0.50),
-            )
-            for observation in observations
-            if str(observation.get("text") or "").strip()
-        ]
+        lines = []
+        for observation in observations:
+            text_value = str(observation.get("text") or "").strip()
+            if not text_value:
+                continue
+            field_key = str(observation.get("field_key") or "").strip()
+            if field_key and field_key != "raw_text":
+                label = field_key.replace("_", " ").title()
+                text_value = f"{label}: {text_value}"
+            lines.append((text_value, float(observation.get("confidence") or 0.50)))
         if lines:
             return _pages_from_text_lines(lines, filename)
 
@@ -237,7 +239,7 @@ FIELD_SPECS: dict[DocumentType, tuple[FieldSpec, ...]] = {
         ("mrz_line_2", "MRZ Line 2", (r"^\s*([A-Z0-9<]{30,})$",), False),
     ),
     DocumentType.driving_license: (
-        ("license_number", "License Number", (r"^\s*(?:D\.?\s*L\.?\s*No\.?|DL No|License No)\s*[:.\-]*\s*([A-Za-z0-9\-\/]+)",), True),
+        ("license_number", "License Number", (r"^\s*(?:D\.?\s*L\.?\s*No\.?|DL No|License No|License Number)\s*[:.\-]*\s*([A-Za-z0-9\-\/]+)",), True),
         ("full_name", "Full Name", (r"^\s*(?:Name|Full Name)\s*[:\-]?\s*([^\n]+)",), True),
         ("blood_group", "Blood Group", (r"^\s*(?:B\.?\s*G\.?|Blood Group)\s*[:.\-]*\s*([A-Za-z0-9+\-]+)",), False),
         ("address", "Address", (r"^\s*(?:Address)\s*[:\-]?\s*([^\n]+)",), True),

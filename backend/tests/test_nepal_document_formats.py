@@ -1,8 +1,13 @@
 from importlib import reload
+from pathlib import Path
+import asyncio
 
 from app.models import CaseType, DocumentType, FinancialDocument
 import app.services.templates as templates_module
-from app.services.enterprise_extraction import build_pages_from_upload, fallback_extraction
+from app.core.config import Settings
+from app.services.enterprise_extraction import build_pages_from_upload, fallback_extraction, process_enterprise_document
+from app.services.gemma import GemmaReasoningClient
+from app.services.ocr import MockOcrProvider
 
 
 def _fallback_from_text(text: str):
@@ -129,3 +134,27 @@ def test_full_page_fallback_extracts_nepal_ipo_and_asba_forms():
     assert asba_fields["dp_id"] == "13013700"
     assert asba_fields["client_id"] == "00151978"
     assert asba_fields["account_number"] == "007004469105"
+
+
+def test_binary_sample_upload_preserves_mock_ocr_field_labels(tmp_path: Path):
+    source_path = tmp_path / "license.jpg"
+    source_path.write_bytes(b"\xff\xd8\xff\xe0")
+
+    async def run():
+        return await process_enterprise_document(
+            case_type=CaseType.document_digitization,
+            filename="license.jpg",
+            content=source_path.read_bytes(),
+            declared_document_type=DocumentType.driving_license,
+            gemma_client=GemmaReasoningClient(Settings(gemma_enabled=False)),
+            source_path=source_path,
+            ocr_provider=MockOcrProvider(),
+        )
+
+    document, fields, _findings = asyncio.run(run())
+    extracted = {field.key: field.value for field in fields}
+
+    assert document.document_type == DocumentType.driving_license
+    assert extracted["license_number"] == "03-06-00354234"
+    assert extracted["full_name"] == "Kiran Lama"
+    assert extracted["category"] == "A"
