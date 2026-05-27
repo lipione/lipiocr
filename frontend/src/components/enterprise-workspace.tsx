@@ -57,6 +57,8 @@ type DocumentType =
   | "passport"
   | "driving_license"
   | "account_opening"
+  | "ipo_application"
+  | "asba_application"
   | "pan"
   | "vat"
   | "cheque"
@@ -486,7 +488,11 @@ const caseTypes: { value: CaseType; label: string }[] = [
 const documentTypes: { value: DocumentType; label: string }[] = [
   { value: "citizenship", label: "Citizenship" },
   { value: "national_id", label: "National ID" },
+  { value: "passport", label: "Passport" },
+  { value: "driving_license", label: "Driving License" },
   { value: "account_opening", label: "Account Form" },
+  { value: "ipo_application", label: "IPO Form" },
+  { value: "asba_application", label: "ASBA Form" },
   { value: "pan", label: "PAN/VAT" },
   { value: "cheque", label: "Cheque" },
   { value: "bank_statement", label: "Bank Statement" },
@@ -996,6 +1002,11 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
         type: "pan",
         name: "pan-certificate.txt",
         text: "Permanent Account Number\nName: Sita Sharma\nPAN: 123456789",
+      },
+      {
+        type: "asba_application",
+        name: "asba-application.txt",
+        text: "NMB Bank Limited\nहितोपत्र खरिद सार्वजनिक निष्कासन दरखास्त फारम\nDP ID: 13013700\nClient ID: 00151978\nApplicant Name: Sita Sharma\nBank Account No: 007004469105\nApplied Units: 400\nAmount: 40000",
       },
     ];
     let currentCase = target;

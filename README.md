@@ -6,6 +6,7 @@ LipiOCR Enterprise is a Nepal-focused KYC and financial document intelligence pl
 
 - Case-based FastAPI backend for KYC/KYB/document processing.
 - Full-page OCR evidence model with blocks, bounding boxes, confidence, and page references.
+- First-class Nepal document formats for citizenship, National ID, passport, smart driving license, account/KYC forms, IPO applications, C-ASBA forms, PAN/VAT, cheques, statements, and KYB documents.
 - Gemma 4 26B reasoning client for OpenAI-compatible vLLM endpoints.
 - Enterprise review console for case creation, document upload, evidence inspection, checklist intelligence, validation findings, approval, audit, verification, and JSON export.
 - Reviewer workbench for assignment, comments, rework requests, evidence crops, and correction tracking.

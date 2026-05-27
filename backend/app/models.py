@@ -39,6 +39,8 @@ class DocumentType(str, Enum):
     passport = "passport"
     driving_license = "driving_license"
     account_opening = "account_opening"
+    ipo_application = "ipo_application"
+    asba_application = "asba_application"
     pan = "pan"
     vat = "vat"
     cheque = "cheque"

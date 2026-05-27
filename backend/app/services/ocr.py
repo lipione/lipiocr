@@ -41,8 +41,48 @@ class MockOcrProvider:
                 self._field("amount", "25000.00", 0.82),
                 self._field("payee", "Sita Sharma", 0.80),
             ],
+            DocumentType.national_id: [
+                self._field("national_id_number", "023-456-2130", 0.92),
+                self._field("full_name", "Bhagawati Kumari", 0.90),
+                self._field("dob", "1978-02-05", 0.87),
+                self._field("gender", "F", 0.83),
+                self._field("issue_date", "2017-01-01", 0.81),
+            ],
+            DocumentType.passport: [
+                self._field("passport_number", "05232944", 0.92),
+                self._field("surname", "Ghimire", 0.89),
+                self._field("given_name", "Ram", 0.88),
+                self._field("nationality", "Nepalese", 0.90),
+                self._field("dob", "1964-03-17", 0.86),
+                self._field("expiry_date", "2021-04-16", 0.86),
+                self._field("mrz_line_1", "P<NPLGHIMIRE<<RAM<<<<<<<<<<<<<<<<<<<<<<<<", 0.82),
+            ],
+            DocumentType.driving_license: [
+                self._field("license_number", "03-06-00354234", 0.91),
+                self._field("full_name", "Kiran Lama", 0.90),
+                self._field("blood_group", "AB+", 0.86),
+                self._field("dob", "1993-11-10", 0.86),
+                self._field("citizenship_number", "251059/6599", 0.84),
+                self._field("category", "A", 0.87),
+            ],
+            DocumentType.ipo_application: [
+                self._field("company_name", "Kisan Micro Finance Bittiya Sanstha Ltd", 0.88),
+                self._field("application_number", "011908", 0.90),
+                self._field("applicant_name", "Ashish Singh", 0.88),
+                self._field("applied_units", "500", 0.85),
+                self._field("amount", "50000", 0.84),
+                self._field("boid", "13013700007004469", 0.82),
+            ],
+            DocumentType.asba_application: [
+                self._field("bank_name", "NMB Bank Limited", 0.91),
+                self._field("applicant_name", "Rudra Man Isuwa", 0.87),
+                self._field("dp_id", "13013700", 0.86),
+                self._field("client_id", "00151978", 0.86),
+                self._field("account_number", "007004469105", 0.84),
+                self._field("amount", "40000", 0.84),
+            ],
         }
-        return samples[document_type]
+        return samples.get(document_type, [])
 
     def _field(self, key: str, value: str, confidence: float) -> OcrObservation:
         return OcrObservation(field_key=key, text=value, confidence=confidence)

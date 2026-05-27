@@ -41,17 +41,28 @@ def validate_field(key: str, value: str, document_type: str) -> Dict[str, str]:
             return {"status": "valid", "message": "OK"}
         return {"status": "warning", "message": "PAN should be 9 digits when provided"}
 
-    if key in {"citizenship_number", "cheque_number"}:
+    if key in {
+        "application_number",
+        "account_number",
+        "boid",
+        "cheque_number",
+        "citizenship_number",
+        "client_id",
+        "dp_id",
+        "license_number",
+        "national_id_number",
+        "passport_number",
+    }:
         if re.fullmatch(r"[A-Za-z0-9\-\/]+", normalized):
             return {"status": "valid", "message": "OK"}
         return {"status": "invalid", "message": "Identifier contains unsupported characters"}
 
-    if key in {"dob", "date"}:
+    if key in {"dob", "date", "issue_date", "expiry_date"}:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
             return {"status": "valid", "message": "OK"}
         return {"status": "warning", "message": "Date should use YYYY-MM-DD"}
 
-    if document_type == "cheque" and key == "amount":
+    if key in {"amount", "applied_units"}:
         if re.fullmatch(r"\d+(\.\d{1,2})?", normalized):
             return {"status": "valid", "message": "OK"}
         return {"status": "warning", "message": "Amount should be numeric"}
