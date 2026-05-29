@@ -1,11 +1,17 @@
 from datetime import datetime
-from pathlib import Path
 from typing import Dict
 
 from fastapi import Body, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import get_settings
+from app.app_context import (
+    UPLOAD_DIR,
+    gemma_client as _gemma_client,
+    object_storage,
+    ocr_provider,
+    repository,
+    settings,
+)
 from app.models import (
     AuditEvent,
     CaseCreateRequest,
@@ -19,22 +25,10 @@ from app.models import (
 )
 from app.services.enterprise_extraction import process_enterprise_document
 from app.services.extraction import extract_fields
-from app.services.gemma import GemmaReasoningClient
-from app.services.ocr import get_ocr_provider
-from app.services.repository import repository
 from app.services.security import require_permission
-from app.services.storage import build_storage
 from app.services.templates import get_template, list_templates
 from app.services.validation import compute_overall_confidence, route_by_confidence, validate_field
 
-
-settings = get_settings()
-BASE_DIR = Path(__file__).resolve().parents[1]
-UPLOAD_DIR = Path(settings.upload_dir)
-if not UPLOAD_DIR.is_absolute():
-    UPLOAD_DIR = BASE_DIR / UPLOAD_DIR
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-object_storage = build_storage(settings)
 
 app = FastAPI(title="LipiOCR Enterprise API", version="0.2.0")
 app.add_middleware(
@@ -44,10 +38,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-def _gemma_client() -> GemmaReasoningClient:
-    return GemmaReasoningClient(settings)
 
 
 @app.get("/health")
@@ -439,7 +429,7 @@ async def upload_case_document(
         declared_document_type=declared_document_type,
         gemma_client=_gemma_client(),
         source_path=stored_path,
-        ocr_provider=get_ocr_provider(settings.ocr_provider),
+        ocr_provider=ocr_provider(),
     )
     case.documents.append(document)
     case.extracted_fields.extend(fields)
@@ -548,7 +538,7 @@ async def upload_document(
     stored_path.write_bytes(contents)
 
     template = get_template(document_type)
-    provider = get_ocr_provider("mock")
+    provider = ocr_provider("mock")
     observations = provider.read(stored_path, document_type)
     fields = extract_fields(template, observations)
     overall_confidence = compute_overall_confidence([field.model_dump() for field in fields])
