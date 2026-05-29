@@ -53,7 +53,7 @@ def _field_from_gemma(raw: Dict[str, Any]) -> ExtractedField:
         source="gemma_reasoning",
         bbox=evidence.bbox,
         evidence=evidence,
-        extracted_by="gemma-4-26b-4bit",
+        extracted_by="LipiCore",
     )
 
 
@@ -96,7 +96,7 @@ def build_extraction_messages(
     pages: List[OcrPage],
 ) -> List[Dict[str, Any]]:
     system = (
-        "You are LipiOCR's Gemma 4 26B reasoning engine for Nepal financial KYC. "
+        "You are LipiOCR's LipiCore reasoning engine for Nepal financial KYC. "
         "Extract only evidence-backed data from OCR/page evidence. Return JSON only. "
         "Do not invent values. If a field is unclear, lower confidence and add a finding. "
         "Use Nepal financial institution context: KYC, KYB, onboarding, PAN/VAT, citizenship, "
@@ -121,12 +121,20 @@ class GemmaReasoningClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def health(self) -> Dict[str, object]:
+    def health(self, *, include_internal: bool = False) -> Dict[str, object]:
+        public_health: Dict[str, object] = {
+            "provider": "LipiCore",
+            "model": "LipiCore",
+            "enabled": self.settings.gemma_enabled,
+            "status": "ready" if self.settings.gemma_enabled else "standby",
+        }
+        if not include_internal:
+            return public_health
         return {
+            **public_health,
             "provider": "vllm-openai-compatible",
             "model": self.settings.gemma_model,
             "api_base": self.settings.gemma_api_base,
-            "enabled": self.settings.gemma_enabled,
             "strict_json": self.settings.gemma_require_json,
             "retries": self.settings.gemma_retries,
         }
