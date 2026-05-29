@@ -23,6 +23,7 @@ from app.models import (
     ReviewRequest,
     ValidationStatus,
 )
+from app.routers import health_router, integration_manifest_router
 from app.services.enterprise_extraction import process_enterprise_document
 from app.services.extraction import extract_fields
 from app.services.security import require_permission
@@ -38,42 +39,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/health")
-def health() -> Dict[str, str]:
-    return {
-        "status": "ok",
-        "service": "lipiocr-enterprise",
-        "environment": settings.environment,
-    }
-
-
-@app.get("/api/ai/health")
-def ai_health():
-    return _gemma_client().health()
-
-
-@app.get("/api/integrations/manifest")
-def integration_manifest():
-    return {
-        "product": "LipiOCR Enterprise",
-        "country": "Nepal",
-        "modes": ["manual_export", "rest_api", "webhooks", "sftp", "embedded_review"],
-        "events": [
-            "case.created",
-            "document.processed",
-            "review.required",
-            "case.approved",
-            "case.rejected",
-            "export.completed",
-        ],
-        "core_endpoints": [
-            "POST /api/cases",
-            "POST /api/cases/{case_id}/documents",
-            "GET /api/cases/{case_id}/export",
-        ],
-    }
+app.include_router(health_router)
+app.include_router(integration_manifest_router)
 
 
 @app.get("/api/integrations/profiles")

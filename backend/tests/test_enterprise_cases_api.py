@@ -71,8 +71,9 @@ def test_ai_health_and_integration_manifest_are_enterprise_ready():
     ai = client.get("/api/ai/health").json()
     manifest = client.get("/api/integrations/manifest").json()
 
-    assert ai["model"] == "gemma-4-26b-4bit"
-    assert ai["provider"] == "vllm-openai-compatible"
+    assert ai["model"] == "LipiCore"
+    assert ai["provider"] == "LipiCore"
+    assert "api_base" not in ai
     assert "rest_api" in manifest["modes"]
     assert "webhooks" in manifest["modes"]
     assert "sftp" in manifest["modes"]
