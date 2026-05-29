@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
+import { apiJson } from "../lib/api-client";
+
 export type WorkspaceSection =
   | "command"
   | "cases"
@@ -476,7 +478,6 @@ type AccuracyAnalytics = {
   recent_corrections: Record<string, unknown>[];
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
 
 const caseTypes: { value: CaseType; label: string }[] = [
   { value: "individual_kyc", label: "Individual KYC" },
@@ -661,15 +662,6 @@ function isKycCase(value: unknown): value is KycCase {
       "documents" in value &&
       "extracted_fields" in value,
   );
-}
-
-async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail ? `${response.status} ${detail.slice(0, 160)}` : `${response.status}`);
-  }
-  return (await response.json()) as T;
 }
 
 export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) {
