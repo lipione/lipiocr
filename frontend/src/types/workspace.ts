@@ -1,3 +1,5 @@
+import type { TemplateDragMode } from "../lib/template-canvas.ts";
+
 export const workspaceSections = [
   "command",
   "cases",
@@ -44,8 +46,11 @@ export type OcrPage = {
   width: number;
   height: number;
   blocks: OcrBlock[];
+  image_uri?: string | null;
   ocr_confidence: number;
 };
+
+export type PreviewOverlayMode = "clean" | "evidence" | "blocks";
 
 export type FinancialDocument = {
   id: string;
@@ -58,11 +63,51 @@ export type FinancialDocument = {
   summary: string;
 };
 
+export type DocumentVersion = {
+  version: number;
+  action: string;
+  filename: string;
+  document_type: DocumentType;
+  status: string;
+  overall_confidence: number;
+  fields_count: number;
+  summary: string;
+  actor: string;
+  note: string;
+  created_at: string;
+};
+
+export type DocumentRecord = {
+  id: string;
+  filename: string;
+  declared_document_type: DocumentType;
+  document_type: DocumentType;
+  status: string;
+  overall_confidence: number;
+  pages: OcrPage[];
+  fields: ExtractedField[];
+  summary: string;
+  validation_findings: ValidationFinding[];
+  audit_events: AuditEvent[];
+  version_history: DocumentVersion[];
+  review: {
+    reviewer?: string | null;
+    note?: string | null;
+    reviewed_at?: string | null;
+  };
+  created_at: string;
+  updated_at?: string;
+};
+
+export type DocumentLane = "application" | "standalone";
+
 export type ExtractedField = {
   key: string;
   label: string;
   value: string;
   confidence: number;
+  required?: boolean;
+  source?: string;
   validation_status: string;
   validation_message: string;
   evidence: {
@@ -74,6 +119,11 @@ export type ExtractedField = {
   extracted_by: string;
   review_status: string;
   document_id?: string | null;
+  original_ocr_value?: string | null;
+  corrected_value?: string | null;
+  source_field_used?: string | null;
+  correction_confidence?: number | null;
+  audit_reason?: string | null;
 };
 
 export type ValidationFinding = {
@@ -116,7 +166,7 @@ export type KycCase = {
 export type AiHealth = {
   provider: string;
   model: string;
-  api_base: string;
+  api_base?: string;
   enabled: boolean;
 };
 
@@ -139,6 +189,55 @@ export type ChecklistItem = {
   confidence?: number;
 };
 
+export type DocumentIntelligence = {
+  document_id: string;
+  filename: string;
+  document_type: DocumentType;
+  declared_document_type: DocumentType;
+  confidence: number;
+  reason: string;
+  canonical_fields: Record<string, string>;
+  language_pairs: {
+    canonical_key: string;
+    nepali_field?: string;
+    english_field?: string;
+    nepali_value: string;
+    english_value: string;
+    nepali_normalized?: string;
+    english_normalized?: string;
+    status: string;
+    message: string;
+  }[];
+  normalizations?: Record<
+    string,
+    {
+      original_value: string;
+      normalized_value: string;
+      method: string;
+      confidence: number;
+      audit_reason: string;
+    }
+  >;
+  confidence_repairs?: {
+    canonical_key: string;
+    target_field: string;
+    source_field_used: string;
+    original_ocr_value: string;
+    corrected_value: string;
+    original_confidence: number;
+    confidence: number;
+    status: string;
+    audit_reason: string;
+  }[];
+  cross_checks: {
+    key: string;
+    status: string;
+    severity: string;
+    message: string;
+  }[];
+  review_recommendations: string[];
+};
+
 export type CaseIntelligence = {
   case_id: string;
   country: string;
@@ -149,6 +248,20 @@ export type CaseIntelligence = {
   summary: string;
   checklist: ChecklistItem[];
   policy_signals: ChecklistItem[];
+  document_intelligence?: DocumentIntelligence[];
+  canonical_fields?: Record<string, string>;
+  language_pairs?: DocumentIntelligence["language_pairs"];
+  confidence_repairs?: NonNullable<DocumentIntelligence["confidence_repairs"]>;
+  entity_reconciliation?: {
+    left_filename: string;
+    right_filename: string;
+    left_value: string;
+    right_value: string;
+    status: string;
+    confidence: number;
+    reason: string;
+  }[];
+  cross_checks?: DocumentIntelligence["cross_checks"];
   gaps: string[];
   next_actions: string[];
   recommended_action: string;
@@ -291,8 +404,63 @@ export type TemplateStudio = {
     status: string;
     mode: string;
   }[];
+  profiles?: {
+    id: string;
+    name: string;
+    document_type: string;
+    version: number;
+    status: string;
+    page_count: number;
+    field_count: number;
+    updated_at: string;
+  }[];
   extraction_modes: string[];
   rules: string[];
+};
+
+export type TemplateProfilePage = {
+  id: string;
+  page_number: number;
+  filename: string;
+  stored_name?: string | null;
+  image_uri?: string | null;
+  width: number;
+  height: number;
+  ocr_confidence: number;
+  blocks: OcrBlock[];
+};
+
+export type TemplateProfileField = {
+  id: string;
+  key: string;
+  label: string;
+  page_number: number;
+  bbox: number[];
+  type: string;
+  required: boolean;
+  language_hint: string;
+  validation_rule?: string | null;
+  extraction_hint: string;
+  confidence: number;
+};
+
+export type TemplateDraft = {
+  id: string;
+  name: string;
+  document_type: DocumentType;
+  status: string;
+  pages: TemplateProfilePage[];
+  fields: TemplateProfileField[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type TemplateDragState = {
+  fieldId: string;
+  mode: TemplateDragMode;
+  startBbox: number[];
+  startClientX: number;
+  startClientY: number;
 };
 
 export type WebhookTestResponse = {
@@ -418,6 +586,13 @@ export type VerificationAdapterRunResponse = {
   adapter: VerificationAdapter;
   check: VerificationCheck;
   case?: KycCase;
+};
+
+export type FieldGroup = {
+  key: string;
+  label: string;
+  description: string;
+  fields: ExtractedField[];
 };
 
 export type AccuracyAnalytics = {
