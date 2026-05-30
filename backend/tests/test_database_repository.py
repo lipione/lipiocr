@@ -15,6 +15,9 @@ from app.db.session import build_engine, create_schema, session_scope
 from app.models import (
     AuditEvent,
     CaseType,
+    DocumentRecord,
+    DocumentStatus,
+    DocumentType,
     ExtractedField,
     EvidenceRef,
     FinancialDocument,
@@ -25,6 +28,7 @@ from app.models import (
     ValidationFinding,
 )
 from app.repositories.cases import SqlCaseRepository
+from app.repositories.documents import SqlDocumentRepository
 
 
 def build_case() -> KycCase:
@@ -119,3 +123,59 @@ def test_sql_case_repository_updates_existing_case(tmp_path: Path):
     assert loaded.extracted_fields[0].value == "Sita Sharma Verified"
     assert len(repository.list_cases()) == 1
     assert len(loaded.audit_events) == 1
+
+
+def build_document() -> DocumentRecord:
+    return DocumentRecord(
+        id="standalone_1",
+        filename="passport.jpg",
+        declared_document_type=DocumentType.passport,
+        document_type=DocumentType.passport,
+        status=DocumentStatus.review_required,
+        overall_confidence=0.82,
+        pages=[
+            OcrPage(
+                page_number=1,
+                width=900,
+                height=1200,
+                blocks=[OcrBlock(text="Passport", bbox=[0, 0, 200, 40], confidence=0.8)],
+                ocr_confidence=0.8,
+            )
+        ],
+        fields=[
+            ExtractedField(
+                key="passport_number",
+                label="Passport Number",
+                value="1234567",
+                confidence=0.85,
+                evidence=EvidenceRef(document_id="standalone_1", source_page=1, evidence_text="1234567"),
+                document_id="standalone_1",
+            )
+        ],
+        validation_findings=[
+            ValidationFinding(
+                severity="warning",
+                code="review_passport",
+                message="Review passport number manually.",
+                document_id="standalone_1",
+            )
+        ],
+        review=ReviewState(reviewer="checker.two", note="Needs passport confirmation", reviewed_at=datetime.utcnow()),
+        audit_events=[AuditEvent(action="document_uploaded", actor="uploader", note="Uploaded")],
+    )
+
+
+def test_sql_document_repository_writes_normalized_rows(tmp_path: Path):
+    engine = build_engine(f"sqlite:///{tmp_path / 'documents.db'}")
+    create_schema(engine)
+    repository = SqlDocumentRepository(engine)
+
+    repository.add(build_document())
+    loaded = repository.get("standalone_1")
+
+    assert loaded.filename == "passport.jpg"
+    assert loaded.pages[0].blocks[0].text == "Passport"
+    assert loaded.fields[0].key == "passport_number"
+    assert loaded.validation_findings[0].code == "review_passport"
+    assert loaded.review.reviewer == "checker.two"
+    assert repository.list()[0].id == "standalone_1"

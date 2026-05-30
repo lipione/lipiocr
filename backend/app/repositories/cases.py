@@ -23,6 +23,7 @@ from app.db.models import (
 from app.db.session import session_scope
 from app.models import (
     AuditEvent,
+    DocumentRecord,
     EvidenceRef,
     ExtractedField,
     FinancialDocument,
@@ -123,7 +124,7 @@ def _audit_event_from_row(row: AuditEventRecord) -> AuditEvent:
     )
 
 
-def _document_from_row(session: Session, row: DocumentRecordRow) -> FinancialDocument:
+def document_pages_from_row(session: Session, row: DocumentRecordRow) -> list[OcrPage]:
     page_rows = list(
         session.execute(
             select(DocumentPageRecord)
@@ -160,6 +161,11 @@ def _document_from_row(session: Session, row: DocumentRecordRow) -> FinancialDoc
                 ],
             )
         )
+    return pages
+
+
+def financial_document_from_row(session: Session, row: DocumentRecordRow) -> FinancialDocument:
+    pages = document_pages_from_row(session, row)
     return FinancialDocument(
         id=row.id,
         filename=row.filename,
@@ -169,6 +175,56 @@ def _document_from_row(session: Session, row: DocumentRecordRow) -> FinancialDoc
         page_count=len(pages),
         pages=pages,
         summary=row.summary,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def document_record_from_row(session: Session, row: DocumentRecordRow) -> DocumentRecord:
+    pages = document_pages_from_row(session, row)
+    fields = [
+        _field_from_row(field_row)
+        for field_row in session.execute(
+            select(ExtractedFieldRecord)
+            .where(ExtractedFieldRecord.document_id == row.id)
+            .where(ExtractedFieldRecord.case_id.is_(None))
+            .order_by(ExtractedFieldRecord.id.asc())
+        ).scalars()
+    ]
+    review_row = session.execute(
+        select(ReviewRecord)
+        .where(ReviewRecord.document_id == row.id)
+        .where(ReviewRecord.case_id.is_(None))
+    ).scalars().first()
+    audit_events = [
+        _audit_event_from_row(audit_row)
+        for audit_row in session.execute(
+            select(AuditEventRecord)
+            .where(AuditEventRecord.tenant_id == row.tenant_id)
+            .where(AuditEventRecord.entity_type == "document")
+            .where(AuditEventRecord.entity_id == row.id)
+            .order_by(AuditEventRecord.created_at.asc())
+        ).scalars()
+    ]
+    return DocumentRecord(
+        id=row.id,
+        filename=row.filename,
+        declared_document_type=row.declared_document_type,
+        document_type=row.document_type,
+        status=row.status,
+        overall_confidence=row.overall_confidence,
+        pages=pages,
+        fields=fields,
+        summary=row.summary,
+        validation_findings=[
+            ValidationFinding.model_validate(finding) for finding in (row.validation_findings or [])
+        ],
+        audit_events=audit_events,
+        review=ReviewState(
+            reviewer=review_row.reviewer if review_row else None,
+            note=review_row.note if review_row else None,
+            reviewed_at=review_row.reviewed_at if review_row else None,
+        ),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -425,7 +481,7 @@ class SqlCaseRepository:
 
     def _case_from_row(self, session: Session, row: CaseRecord) -> KycCase:
         documents = [
-            _document_from_row(session, document_row)
+            financial_document_from_row(session, document_row)
             for document_row in session.execute(
                 select(DocumentRecordRow)
                 .where(DocumentRecordRow.case_id == row.id)
