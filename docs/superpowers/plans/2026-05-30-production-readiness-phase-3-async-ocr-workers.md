@@ -280,3 +280,8 @@ Append a verification log to this plan and commit it if all checks pass.
 - Worker can complete or fail document processing without blocking request handlers.
 - Failed OCR/LipiCore jobs can be retried.
 - Existing synchronous demo behavior remains available while the UI migrates.
+
+## Verification Log
+
+- 2026-05-30: `cd backend && .venv/bin/python -m pytest tests/test_document_jobs.py tests/test_upload_job_api.py -q` passed with `12 passed`.
+- 2026-05-30: `make test` passed with backend `99 passed`, frontend Node tests `11 passed`, ESLint clean, and Next production build successful.
