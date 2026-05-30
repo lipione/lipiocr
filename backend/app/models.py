@@ -259,6 +259,11 @@ class TemplateProfile(BaseModel):
     document_type: DocumentType = DocumentType.unknown
     version: int = 1
     status: str = "published"
+    tenant_id: str = "demo-institution"
+    approval_status: str = "approved"
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    rollback_of: Optional[int] = None
     pages: List[TemplateProfilePage] = Field(default_factory=list)
     fields: List[TemplateProfileField] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lipiocr-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lipiocr-api
+  template:
+    metadata:
+      labels:
+        app: lipiocr-api
+    spec:
+      containers:
+        - name: api
+          image: {{ .Values.image.api | quote }}
+          ports:
+            - containerPort: 8000
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lipiocr-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lipiocr-frontend
+  template:
+    metadata:
+      labels:
+        app: lipiocr-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: {{ .Values.image.frontend | quote }}
+          ports:
+            - containerPort: 3000

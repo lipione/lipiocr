@@ -4,6 +4,8 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Dict, Iterable
 
+from app.accuracy.dataset import default_manifest_path, load_benchmark_manifest
+from app.accuracy.report import build_benchmark_report, dataset_from_cases
 from app.models import AuditEvent, KycCase
 
 
@@ -37,12 +39,13 @@ def record_correction(case: KycCase, payload: Dict[str, object]) -> Dict[str, ob
 
 
 def build_accuracy_analytics(cases: Iterable[KycCase]) -> Dict[str, object]:
+    cases_list = list(cases)
     corrections = []
     field_counts: Counter[str] = Counter()
     document_counts: Counter[str] = Counter()
     confidence_totals: defaultdict[str, float] = defaultdict(float)
     confidence_counts: Counter[str] = Counter()
-    for case in cases:
+    for case in cases_list:
         for field in case.extracted_fields:
             field_counts[field.key] += 0
             confidence_totals[field.key] += field.confidence
@@ -75,10 +78,14 @@ def build_accuracy_analytics(cases: Iterable[KycCase]) -> Dict[str, object]:
         }
         for document_type, count in document_counts.items()
     }
+    manifest_path = default_manifest_path()
+    benchmark_dataset = load_benchmark_manifest(manifest_path) if manifest_path else dataset_from_cases(cases_list)
+
     return {
         "correction_count": len(corrections),
         "field_accuracy": field_accuracy,
         "document_type_performance": document_type_performance,
+        "benchmark": build_benchmark_report(benchmark_dataset),
         "confidence_drift": [
             {
                 "field_key": field_key,

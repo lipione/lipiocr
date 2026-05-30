@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lipiocr-api
+spec:
+  selector:
+    app: lipiocr-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lipiocr-frontend
+spec:
+  selector:
+    app: lipiocr-frontend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000

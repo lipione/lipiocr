@@ -194,11 +194,15 @@ def update_template_draft(draft_id: str, update: TemplateDraftUpdate) -> Templat
     return draft
 
 
-def publish_template_draft(draft_id: str) -> tuple[TemplateProfile, dict[str, object]]:
+def publish_template_draft(draft_id: str, *, tenant_id: str = "demo-institution", actor: str = "system") -> tuple[TemplateProfile, dict[str, object]]:
     draft = get_template_draft(draft_id)
     profile = TemplateProfile(
         name=draft.name,
         document_type=draft.document_type,
+        tenant_id=tenant_id,
+        approval_status="approved",
+        approved_by=actor,
+        approved_at=datetime.utcnow(),
         pages=draft.pages,
         fields=draft.fields,
     )
@@ -224,9 +228,74 @@ def publish_template_draft(draft_id: str) -> tuple[TemplateProfile, dict[str, ob
     return profile, template_result
 
 
-def list_template_profiles() -> list[TemplateProfile]:
+def list_template_profiles(*, tenant_id: Optional[str] = None) -> list[TemplateProfile]:
     _load()
-    return sorted(_PROFILES.values(), key=lambda item: item.updated_at, reverse=True)
+    profiles = list(_PROFILES.values())
+    if tenant_id:
+        profiles = [profile for profile in profiles if profile.tenant_id == tenant_id]
+    return sorted(profiles, key=lambda item: item.updated_at, reverse=True)
+
+
+def get_template_profile(profile_id: str) -> TemplateProfile:
+    _load()
+    profile = _PROFILES.get(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Template profile not found")
+    return profile
+
+
+def approve_template_profile(profile_id: str, *, actor: str) -> TemplateProfile:
+    profile = get_template_profile(profile_id)
+    profile.approval_status = "approved"
+    profile.approved_by = actor
+    profile.approved_at = datetime.utcnow()
+    profile.status = "published"
+    profile.updated_at = datetime.utcnow()
+    _PROFILES[profile.id] = profile
+    _persist()
+    return profile
+
+
+def rollback_template_profile(profile_id: str, *, target_version: int, actor: str) -> TemplateProfile:
+    profile = get_template_profile(profile_id)
+    if target_version < 1 or target_version > profile.version:
+        raise HTTPException(status_code=400, detail="Target version is outside template history")
+    profile.version += 1
+    profile.rollback_of = target_version
+    profile.approval_status = "approved"
+    profile.approved_by = actor
+    profile.approved_at = datetime.utcnow()
+    profile.status = "published"
+    profile.updated_at = datetime.utcnow()
+    _PROFILES[profile.id] = profile
+    _persist()
+    return profile
+
+
+def export_template_profile(profile_id: str) -> dict[str, object]:
+    profile = get_template_profile(profile_id)
+    return {
+        "format": "lipiocr.template-profile.v1",
+        "profile": profile.model_dump(mode="json"),
+    }
+
+
+def import_template_profile(payload: dict[str, object], *, tenant_id: str, actor: str) -> TemplateProfile:
+    raw_profile = payload.get("profile") if payload.get("format") else payload
+    if not isinstance(raw_profile, dict):
+        raise HTTPException(status_code=400, detail="Template profile payload is invalid")
+    profile = TemplateProfile.model_validate(raw_profile)
+    profile.id = f"tpl_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+    profile.tenant_id = tenant_id
+    profile.version = max(1, int(profile.version))
+    profile.status = "published"
+    profile.approval_status = "approved"
+    profile.approved_by = actor
+    profile.approved_at = datetime.utcnow()
+    profile.updated_at = datetime.utcnow()
+    _PROFILES[profile.id] = profile
+    _persist()
+    return profile
 
 
 def template_profile_summaries() -> list[dict[str, object]]:

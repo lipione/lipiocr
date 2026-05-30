@@ -634,6 +634,18 @@ export type AccuracyAnalytics = {
     }
   >;
   document_type_performance: Record<string, { corrections: number; status: string }>;
+  benchmark?: {
+    sample_count: number;
+    overall: {
+      character_error_rate: number;
+      word_error_rate: number;
+      field_precision: number;
+      field_recall: number;
+      field_f1: number;
+      reviewer_correction_rate: number;
+    };
+    by_mode: Record<string, { field_f1: number; reviewer_correction_rate: number }>;
+  };
   confidence_drift: {
     field_key: string;
     average_confidence: number;

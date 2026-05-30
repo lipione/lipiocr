@@ -1,0 +1,38 @@
+{
+  "name": "LipiOCR Nepal Financial Document Benchmark",
+  "version": "2026.05",
+  "samples": [
+    {
+      "sample_id": "citizenship-printed-001",
+      "document_type": "citizenship",
+      "mode": "printed",
+      "expected_text": "Government of Nepal Name Sita Sharma Citizenship No 27-01-78-12345",
+      "actual_text": "Government of Nepal Name Sita Sharma Citizenship No 27-01-78-12345",
+      "expected_fields": {
+        "full_name": "Sita Sharma",
+        "citizenship_number": "27-01-78-12345"
+      },
+      "actual_fields": {
+        "full_name": "Sita Sharma",
+        "citizenship_number": "27-01-78-12345"
+      },
+      "reviewer_corrections": 0
+    },
+    {
+      "sample_id": "asba-handwriting-001",
+      "document_type": "asba_application",
+      "mode": "handwriting",
+      "expected_text": "Applicant Name Rudra Man Isuwa Amount 35000",
+      "actual_text": "Applicant Name Rudra M Isuwa Amount 3500O",
+      "expected_fields": {
+        "full_name_en": "Rudra Man Isuwa",
+        "amount": "35000"
+      },
+      "actual_fields": {
+        "full_name_en": "Rudra M Isuwa",
+        "amount": "3500O"
+      },
+      "reviewer_corrections": 2
+    }
+  ]
+}

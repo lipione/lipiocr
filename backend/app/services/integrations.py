@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.integrations.idempotency import build_idempotency_key
 from app.models import AuditEvent, IntegrationEvent, KycCase
 
 
@@ -250,6 +251,11 @@ def build_export_profile(case: KycCase, profile_key: str) -> dict[str, Any]:
     return {
         "case_id": case.id,
         "profile_key": profile_key,
+        "idempotency_key": build_idempotency_key(
+            tenant_id=case.institution_id,
+            target=f"export:{profile_key}:{case.id}",
+            payload=payload,
+        ),
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "payload": payload,
     }

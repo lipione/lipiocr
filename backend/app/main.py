@@ -31,7 +31,7 @@ from app.models import (
     TemplateDraftUpdate,
     ValidationStatus,
 )
-from app.routers import health_router, integration_manifest_router
+from app.routers import compliance_router, health_router, integration_manifest_router, templates_router, tenants_router
 from app.services.calendar_intelligence import apply_calendar_intelligence
 from app.services.enterprise_extraction import process_enterprise_document
 from app.security.rbac import ROLE_PERMISSIONS
@@ -52,6 +52,9 @@ app.add_middleware(
 )
 app.include_router(health_router)
 app.include_router(integration_manifest_router)
+app.include_router(templates_router)
+app.include_router(tenants_router)
+app.include_router(compliance_router)
 
 
 IMAGE_SUFFIXES = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
@@ -626,6 +629,14 @@ def configure_integration_webhook(http_request: Request, payload: Dict[str, obje
 
     require_permission(settings, http_request, "manage_integrations")
     return configure_webhook(payload)
+
+
+@app.post("/api/integrations/webhooks/deliver", status_code=202)
+def queue_integration_webhook(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.integration_operations import queue_webhook_delivery
+
+    require_permission(settings, http_request, "export_case")
+    return queue_webhook_delivery(payload)
 
 
 @app.post("/api/integrations/sftp/batch", status_code=202)
