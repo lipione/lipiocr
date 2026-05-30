@@ -120,6 +120,7 @@ class SqlDocumentRepository:
                 DocumentPageRecord(
                     id=_page_record_id(document.id, page.page_number),
                     tenant_id=self.tenant_id,
+                    case_id=None,
                     document_id=document.id,
                     page_number=page.page_number,
                     width=page.width,
@@ -133,6 +134,7 @@ class SqlDocumentRepository:
                     OcrBlockRecord(
                         id=_block_record_id(document.id, page.page_number, sequence),
                         tenant_id=self.tenant_id,
+                        case_id=None,
                         document_id=document.id,
                         page_number=page.page_number,
                         sequence=sequence,
@@ -192,6 +194,7 @@ class SqlDocumentRepository:
             DocumentVersionRecord(
                 id=f"{document_id}:version:{version.version}",
                 tenant_id=self.tenant_id,
+                case_id=None,
                 document_id=document_id,
                 version=version.version,
                 action=version.action,

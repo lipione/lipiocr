@@ -79,6 +79,7 @@ class DocumentVersionRecord(TenantScopedMixin, Base):
     __tablename__ = "document_versions"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    case_id: Mapped[Optional[str]] = mapped_column(String(80), ForeignKey("cases.id"), index=True)
     document_id: Mapped[str] = mapped_column(String(80), ForeignKey("documents.id"), index=True, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     action: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -97,6 +98,7 @@ class DocumentPageRecord(TenantScopedMixin, Base):
     __tablename__ = "document_pages"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    case_id: Mapped[Optional[str]] = mapped_column(String(80), ForeignKey("cases.id"), index=True)
     document_id: Mapped[str] = mapped_column(String(80), ForeignKey("documents.id"), index=True, nullable=False)
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -109,6 +111,7 @@ class OcrBlockRecord(TenantScopedMixin, Base):
     __tablename__ = "ocr_blocks"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    case_id: Mapped[Optional[str]] = mapped_column(String(80), ForeignKey("cases.id"), index=True)
     document_id: Mapped[str] = mapped_column(String(80), ForeignKey("documents.id"), index=True, nullable=False)
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -195,6 +198,7 @@ class AuditEventRecord(TenantScopedMixin, Base):
     __tablename__ = "audit_events"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    case_id: Mapped[Optional[str]] = mapped_column(String(80), ForeignKey("cases.id"), index=True)
     entity_type: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
     entity_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     action: Mapped[str] = mapped_column(String(160), nullable=False)

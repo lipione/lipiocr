@@ -14,6 +14,7 @@ from app.db.models import (
     CaseRecord,
     DocumentPageRecord,
     DocumentRecordRow,
+    DocumentVersionRecord,
     ExtractedFieldRecord,
     FieldCorrectionRecord,
     IntegrationEventRecord,
@@ -24,6 +25,7 @@ from app.db.session import session_scope
 from app.models import (
     AuditEvent,
     DocumentRecord,
+    DocumentVersion,
     EvidenceRef,
     ExtractedField,
     FinancialDocument,
@@ -206,6 +208,27 @@ def document_record_from_row(session: Session, row: DocumentRecordRow) -> Docume
             .order_by(AuditEventRecord.created_at.asc())
         ).scalars()
     ]
+    version_history = [
+        DocumentVersion(
+            version=version.version,
+            action=version.action,
+            filename=version.filename,
+            document_type=version.document_type,
+            status=version.status,
+            overall_confidence=version.overall_confidence,
+            fields_count=version.fields_count,
+            summary=version.summary,
+            actor=version.actor,
+            note=version.note,
+            created_at=version.created_at,
+        )
+        for version in session.execute(
+            select(DocumentVersionRecord)
+            .where(DocumentVersionRecord.document_id == row.id)
+            .where(DocumentVersionRecord.case_id.is_(None))
+            .order_by(DocumentVersionRecord.version.asc())
+        ).scalars()
+    ]
     return DocumentRecord(
         id=row.id,
         filename=row.filename,
@@ -220,6 +243,7 @@ def document_record_from_row(session: Session, row: DocumentRecordRow) -> Docume
             ValidationFinding.model_validate(finding) for finding in (row.validation_findings or [])
         ],
         audit_events=audit_events,
+        version_history=version_history,
         review=ReviewState(
             reviewer=review_row.reviewer if review_row else None,
             note=review_row.note if review_row else None,
@@ -321,6 +345,7 @@ class SqlCaseRepository:
                     DocumentPageRecord(
                         id=_page_record_id(document.id, page.page_number),
                         tenant_id=tenant_id,
+                        case_id=case_id,
                         document_id=document.id,
                         page_number=page.page_number,
                         width=page.width,
@@ -334,6 +359,7 @@ class SqlCaseRepository:
                         OcrBlockRecord(
                             id=_block_record_id(document.id, page.page_number, sequence),
                             tenant_id=tenant_id,
+                            case_id=case_id,
                             document_id=document.id,
                             page_number=page.page_number,
                             sequence=sequence,
@@ -460,12 +486,14 @@ class SqlCaseRepository:
                 metadata=event.metadata,
                 previous_hash=previous_hash,
                 created_at=event.created_at,
+                case_id=entity_id if entity_type == "case" else None,
             )
             record_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             session.add(
                 AuditEventRecord(
                     id=f"audit_{uuid4().hex}",
                     tenant_id=tenant_id,
+                    case_id=entity_id if entity_type == "case" else None,
                     entity_type=entity_type,
                     entity_id=entity_id,
                     action=event.action,

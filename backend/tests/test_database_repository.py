@@ -8,8 +8,10 @@ from app.db.models import (
     CaseRecord,
     DocumentPageRecord,
     DocumentRecordRow,
+    DocumentVersionRecord,
     ExtractedFieldRecord,
     OcrBlockRecord,
+    ReviewRecord,
 )
 from app.db.session import build_engine, create_schema, session_scope
 from app.models import (
@@ -18,6 +20,7 @@ from app.models import (
     DocumentRecord,
     DocumentStatus,
     DocumentType,
+    DocumentVersion,
     ExtractedField,
     EvidenceRef,
     FinancialDocument,
@@ -102,10 +105,14 @@ def test_sql_case_repository_writes_normalized_rows(tmp_path: Path):
     with session_scope(engine) as session:
         assert session.execute(select(CaseRecord)).scalars().one().tenant_id == "tenant_1"
         assert session.execute(select(DocumentRecordRow)).scalars().one().tenant_id == "tenant_1"
-        assert session.execute(select(DocumentPageRecord)).scalars().one().document_id == "doc_1"
-        assert session.execute(select(OcrBlockRecord)).scalars().one().text == "Sita Sharma"
+        assert session.execute(select(DocumentPageRecord)).scalars().one().case_id == "case_1"
+        block = session.execute(select(OcrBlockRecord)).scalars().one()
+        assert block.case_id == "case_1"
+        assert block.text == "Sita Sharma"
         assert session.execute(select(ExtractedFieldRecord)).scalars().one().field_key == "full_name"
-        assert session.execute(select(AuditEventRecord)).scalars().one().record_hash
+        audit = session.execute(select(AuditEventRecord)).scalars().one()
+        assert audit.case_id == "case_1"
+        assert audit.record_hash
 
 
 def test_sql_case_repository_updates_existing_case(tmp_path: Path):
@@ -162,6 +169,18 @@ def build_document() -> DocumentRecord:
         ],
         review=ReviewState(reviewer="checker.two", note="Needs passport confirmation", reviewed_at=datetime.utcnow()),
         audit_events=[AuditEvent(action="document_uploaded", actor="uploader", note="Uploaded")],
+        version_history=[
+            DocumentVersion(
+                version=1,
+                action="uploaded",
+                filename="passport.jpg",
+                document_type=DocumentType.passport,
+                status=DocumentStatus.review_required,
+                overall_confidence=0.82,
+                fields_count=1,
+                actor="uploader",
+            )
+        ],
     )
 
 
@@ -178,4 +197,14 @@ def test_sql_document_repository_writes_normalized_rows(tmp_path: Path):
     assert loaded.fields[0].key == "passport_number"
     assert loaded.validation_findings[0].code == "review_passport"
     assert loaded.review.reviewer == "checker.two"
+    assert loaded.version_history[0].action == "uploaded"
     assert repository.list()[0].id == "standalone_1"
+
+    with session_scope(engine) as session:
+        assert session.execute(select(DocumentRecordRow)).scalars().one().case_id is None
+        assert session.execute(select(DocumentPageRecord)).scalars().one().case_id is None
+        assert session.execute(select(OcrBlockRecord)).scalars().one().case_id is None
+        assert session.execute(select(ExtractedFieldRecord)).scalars().one().case_id is None
+        assert session.execute(select(ReviewRecord)).scalars().one().case_id is None
+        assert session.execute(select(DocumentVersionRecord)).scalars().one().case_id is None
+        assert session.execute(select(AuditEventRecord)).scalars().one().case_id is None

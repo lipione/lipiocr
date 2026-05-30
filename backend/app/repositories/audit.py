@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
+from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import Engine, select
@@ -22,10 +23,12 @@ def _canonical_payload(
     metadata: dict,
     previous_hash: str,
     created_at: datetime,
+    case_id: Optional[str] = None,
 ) -> str:
     return json.dumps(
         {
             "tenant_id": tenant_id,
+            "case_id": case_id,
             "entity_type": entity_type,
             "entity_id": entity_id,
             "action": action,
@@ -54,6 +57,7 @@ class AuditRepository:
         actor: str,
         note: str,
         metadata: dict,
+        case_id: Optional[str] = None,
     ) -> AuditEventRecord:
         with session_scope(self.engine) as session:
             previous = session.execute(
@@ -67,6 +71,7 @@ class AuditRepository:
             previous_hash = previous.record_hash if previous else ""
             payload = _canonical_payload(
                 tenant_id=tenant_id,
+                case_id=case_id,
                 entity_type=entity_type,
                 entity_id=entity_id,
                 action=action,
@@ -79,6 +84,7 @@ class AuditRepository:
             record = AuditEventRecord(
                 id=f"audit_{uuid4().hex}",
                 tenant_id=tenant_id,
+                case_id=case_id,
                 entity_type=entity_type,
                 entity_id=entity_id,
                 action=action,
