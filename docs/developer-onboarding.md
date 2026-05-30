@@ -73,7 +73,7 @@ make frontend-dev
 Open:
 
 - Frontend: `http://localhost:3000`
-- API health: `http://localhost:8010/api/health`
+- API health: `http://localhost:8010/health`
 - API docs: `http://localhost:8010/docs`
 
 Local defaults:

@@ -31,7 +31,7 @@ The institution owner must approve final RPO/RTO values before go-live.
 
 ## Validation Checklist
 
-- `/api/health` responds.
+- `/health` responds.
 - Operator session or API-key auth works.
 - Case list opens.
 - Document image preview opens through signed token or authorized request.

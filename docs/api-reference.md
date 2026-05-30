@@ -37,7 +37,7 @@ Fix it by creating a session, sending `X-LipiOCR-API-Key`, or disabling auth for
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/health` | Health check for API availability. |
+| `GET` | `/health` | Health check for API availability. |
 | `GET` | `/api/platform/status` | Production readiness and platform state. |
 | `GET` | `/api/ocr/pipeline` | OCR provider and pipeline posture. |
 | `GET` | `/api/dashboard/operations` | Dashboard operational metrics. |

@@ -223,7 +223,7 @@ deploy/scripts/health-check.sh http://localhost:8020
 Manual checks:
 
 ```bash
-curl http://localhost:8020/api/health
+curl http://localhost:8020/health
 curl http://localhost:8020/api/platform/status
 ```
 
