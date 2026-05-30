@@ -54,6 +54,7 @@ class CaseRecord(TenantScopedMixin, Base):
     integration_ref: Mapped[Optional[str]] = mapped_column(String(160))
     status: Mapped[str] = mapped_column(String(80), nullable=False)
     risk_level: Mapped[str] = mapped_column(String(40), nullable=False)
+    validation_findings: Mapped[list[Dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
@@ -69,6 +70,7 @@ class DocumentRecordRow(TenantScopedMixin, Base):
     status: Mapped[str] = mapped_column(String(80), nullable=False)
     overall_confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    validation_findings: Mapped[list[Dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 

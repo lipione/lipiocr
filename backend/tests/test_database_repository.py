@@ -1,0 +1,121 @@
+from datetime import datetime
+from pathlib import Path
+
+from sqlalchemy import select
+
+from app.db.models import (
+    AuditEventRecord,
+    CaseRecord,
+    DocumentPageRecord,
+    DocumentRecordRow,
+    ExtractedFieldRecord,
+    OcrBlockRecord,
+)
+from app.db.session import build_engine, create_schema, session_scope
+from app.models import (
+    AuditEvent,
+    CaseType,
+    ExtractedField,
+    EvidenceRef,
+    FinancialDocument,
+    KycCase,
+    OcrBlock,
+    OcrPage,
+    ReviewState,
+    ValidationFinding,
+)
+from app.repositories.cases import SqlCaseRepository
+
+
+def build_case() -> KycCase:
+    document = FinancialDocument(
+        id="doc_1",
+        filename="citizenship.jpg",
+        document_type="citizenship",
+        declared_document_type="citizenship",
+        page_count=1,
+        pages=[
+            OcrPage(
+                page_number=1,
+                width=1000,
+                height=700,
+                blocks=[OcrBlock(text="Sita Sharma", bbox=[10, 20, 200, 60], confidence=0.91, language="eng")],
+                ocr_confidence=0.91,
+            )
+        ],
+        summary="Citizenship",
+    )
+    return KycCase(
+        id="case_1",
+        case_type=CaseType.individual_kyc,
+        applicant_name="Sita Sharma",
+        institution_id="tenant_1",
+        branch_code="KTM",
+        integration_ref="CBS-1",
+        documents=[document],
+        extracted_fields=[
+            ExtractedField(
+                key="full_name",
+                label="Full Name",
+                value="Sita Sharma",
+                confidence=0.93,
+                evidence=EvidenceRef(
+                    document_id="doc_1",
+                    source_page=1,
+                    bbox=[10, 20, 200, 60],
+                    evidence_text="Sita Sharma",
+                ),
+                document_id="doc_1",
+            )
+        ],
+        validation_findings=[
+            ValidationFinding(
+                severity="warning",
+                code="manual_review",
+                message="Reviewer should confirm citizenship number.",
+                document_id="doc_1",
+            )
+        ],
+        review=ReviewState(reviewer="checker.one", note="Looks consistent", reviewed_at=datetime.utcnow()),
+        audit_events=[AuditEvent(action="case_created", actor="maker.one", note="Created", created_at=datetime.utcnow())],
+    )
+
+
+def test_sql_case_repository_writes_normalized_rows(tmp_path: Path):
+    engine = build_engine(f"sqlite:///{tmp_path / 'cases.db'}")
+    create_schema(engine)
+    repository = SqlCaseRepository(engine)
+
+    saved = repository.add_case(build_case())
+    loaded = repository.get_case(saved.id)
+
+    assert loaded.applicant_name == "Sita Sharma"
+    assert loaded.documents[0].pages[0].blocks[0].text == "Sita Sharma"
+    assert loaded.extracted_fields[0].evidence.document_id == "doc_1"
+    assert loaded.validation_findings[0].code == "manual_review"
+    assert loaded.review.reviewer == "checker.one"
+
+    with session_scope(engine) as session:
+        assert session.execute(select(CaseRecord)).scalars().one().tenant_id == "tenant_1"
+        assert session.execute(select(DocumentRecordRow)).scalars().one().tenant_id == "tenant_1"
+        assert session.execute(select(DocumentPageRecord)).scalars().one().document_id == "doc_1"
+        assert session.execute(select(OcrBlockRecord)).scalars().one().text == "Sita Sharma"
+        assert session.execute(select(ExtractedFieldRecord)).scalars().one().field_key == "full_name"
+        assert session.execute(select(AuditEventRecord)).scalars().one().record_hash
+
+
+def test_sql_case_repository_updates_existing_case(tmp_path: Path):
+    engine = build_engine(f"sqlite:///{tmp_path / 'cases.db'}")
+    create_schema(engine)
+    repository = SqlCaseRepository(engine)
+    case = repository.add_case(build_case())
+    case.applicant_name = "Sita Sharma Verified"
+    case.extracted_fields[0].value = "Sita Sharma Verified"
+
+    repository.save_case(case)
+    loaded = repository.get_case(case.id)
+
+    assert loaded.applicant_name == "Sita Sharma Verified"
+    assert loaded.extracted_fields[0].value == "Sita Sharma Verified"
+    assert len(repository.list_cases()) == 1
+    assert len(loaded.audit_events) == 1
