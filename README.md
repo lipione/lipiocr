@@ -1,216 +1,116 @@
 # LipiOCR Enterprise
 
-LipiOCR Enterprise is a Nepal-focused KYC and financial document intelligence platform. It is designed for banks, cooperatives, MFIs, wallets, remittance companies, insurers, and lenders that need evidence-backed document extraction, human review, auditability, and integration with existing CBS/LOS/CRM/DMS systems.
+LipiOCR Enterprise is a Nepal-focused document intelligence platform for financial institutions. It helps banks, cooperatives, MFIs, wallets, remittance companies, insurers, lenders, brokers, and merchant banks process KYC/KYB documents, onboarding packets, forms, and archives with evidence-backed OCR/ICR, bilingual normalization, human review, audit controls, and integration-ready exports.
 
-## Current Scope
+LipiOCR is not positioned as "OCR only." The core product is LipiCore-assisted document understanding:
 
-- Case-based FastAPI backend for KYC/KYB/document processing.
-- Full-page OCR evidence model with blocks, bounding boxes, confidence, and page references.
-- First-class Nepal document formats for citizenship, National ID, passport, smart driving license, account/KYC forms, IPO applications, C-ASBA forms, PAN/VAT, cheques, statements, and KYB documents.
-- Gemma 4 26B reasoning client for OpenAI-compatible vLLM endpoints.
-- Enterprise review console for case creation, document upload, evidence inspection, checklist intelligence, validation findings, approval, audit, verification, and JSON export.
-- Reviewer workbench for assignment, comments, rework requests, evidence crops, and correction tracking.
-- Template studio for coordinate-based document templates with validation rules.
-- Nepal KYC intelligence APIs for individual KYC, business KYB, loan onboarding, and document digitization readiness.
-- Integration kit APIs for REST, signed webhooks, configurable webhook delivery, SFTP-ready batch delivery, retry queues, embedded review links, and CBS/LOS/AML export profiles.
-- Enterprise controls APIs for tenant policy, branch controls, RBAC, maker-checker queue, retention posture, and audit hash-chain summaries.
-- Provider-neutral advanced verification interfaces and adapter registry for National ID/PAN registry, AML/sanctions, face/liveness, tamper signals, signature/photo presence, and duplicate detection.
-- Accuracy analytics from reviewer corrections, field confidence drift, and document-type performance.
-- Docker deployment shape for `/data/lipiocr` with API, frontend, Postgres, Redis, and MinIO.
+- OCR and ICR evidence capture.
+- Bilingual Nepali/English field pairing.
+- BS/AD date normalization.
+- Entity reconciliation across documents.
+- Confidence repair with audit reasons.
+- Reviewer-safe correction before export.
 
-## Architecture
+## What It Does
+
+- Reads full-page documents and keeps OCR evidence: pages, blocks, bounding boxes, raw text, confidence, and page references.
+- Supports Nepal document workflows: citizenship, National ID, passport, smart driving license, PAN/VAT, bank KYC/account forms, IPO/C-ASBA forms, cheques, statements, KYB documents, and unknown document packets.
+- Extracts fields using both full-page LipiCore reasoning and tenant-specific templates.
+- Lets reviewers correct uncertain fields while preserving original OCR values and audit history.
+- Normalizes Nepali and English fields into export-ready structures for downstream systems.
+- Provides validation, verification adapter scaffolding, maker-checker workflow, comments, rework, and approval.
+- Exports JSON/API payloads and supports signed webhooks, SFTP batch receipts, idempotency keys, and embedded review links.
+- Supports on-prem/private-cloud deployment and SaaS-oriented tenant controls.
+
+## Documentation
+
+Start with [docs/README.md](./docs/README.md).
+
+Key references:
+
+- [Developer Onboarding](./docs/developer-onboarding.md)
+- [Architecture](./docs/architecture.md)
+- [API Reference](./docs/api-reference.md)
+- [Configuration](./docs/configuration.md)
+- [Deployment](./docs/deployment.md)
+- [Production Security Checklist](./docs/security/production-security-checklist.md)
+- [Incident Response Runbook](./docs/runbooks/incident-response.md)
+- [Disaster Recovery Runbook](./docs/runbooks/disaster-recovery.md)
+
+## Repository Layout
 
 ```text
-frontend/ Next.js enterprise review console
-        |
-        v
-backend/ FastAPI KYC workflow API
-        |
-        +-- Full-page OCR evidence model
-        +-- Gemma 4 26B reasoning layer
-        +-- Nepal KYC/KYB intelligence, validation, and review workflow
-        +-- Integration kit and export profiles
-        +-- Enterprise controls and verification adapters
+backend/   FastAPI API, OCR/LipiCore services, repositories, jobs, security
+frontend/  Next.js enterprise workspace
+infra/     Docker Compose production-shaped stack
+deploy/    On-prem pack: Compose docs, Helm skeleton, scripts, Nginx reference
+docs/      Product, developer, API, deployment, security, and runbook docs
 ```
 
-## Enterprise API Surface
+## Quick Start
 
-Core case flow:
-
-- `POST /api/cases`
-- `POST /api/cases/{case_id}/documents`
-- `GET /api/cases/{case_id}/intelligence`
-- `POST /api/cases/{case_id}/split-preview`
-- `POST /api/cases/{case_id}/classify`
-- `POST /api/cases/{case_id}/validate`
-- `POST /api/cases/{case_id}/verification/run`
-- `POST /api/cases/{case_id}/verification/{adapter_key}/run`
-- `PATCH /api/cases/{case_id}/review`
-- `GET /api/cases/{case_id}/export-profile/{profile_key}`
-- `GET /api/review/workbench/{case_id}`
-- `POST /api/cases/{case_id}/assign`
-- `POST /api/cases/{case_id}/comments`
-- `POST /api/cases/{case_id}/rework`
-
-Institution integration and controls:
-
-- `GET /api/integrations/profiles`
-- `GET /api/integrations/operations`
-- `POST /api/integrations/webhook/test`
-- `POST /api/integrations/webhooks/configure`
-- `POST /api/integrations/sftp/batch`
-- `POST /api/integrations/retry/{event_id}`
-- `POST /api/cases/{case_id}/embedded-review-link`
-- `GET /api/platform/status`
-- `GET /api/ocr/pipeline`
-- `GET /api/dashboard/operations`
-- `GET /api/admin/tenant`
-- `GET /api/admin/rbac`
-- `GET /api/admin/audit-integrity`
-- `GET /api/admin/templates/studio`
-- `POST /api/admin/templates/studio`
-- `GET /api/review/queue`
-- `GET /api/verification/adapters`
-- `POST /api/verification/adapters/{adapter_key}/configure`
-- `GET /api/analytics/accuracy`
-- `POST /api/analytics/corrections`
-
-External systems that require real institution credentials return explicit `not_configured` states instead of pretending to verify live National ID, PAN, AML, liveness, or SFTP connections.
-
-## Enterprise UX
-
-The frontend is now organized as a route-backed enterprise workspace instead of one overloaded demo page:
-
-- `/`: Command center for portfolio KPIs, platform readiness, work queues, and decision signals.
-- `/cases`: Case management with intake, selected case detail, review, verification, export, and audit context.
-- `/documents`: Document intake, full-packet upload, OCR evidence, extracted fields, and decision checklist.
-- `/review`: Maker-checker workbench with assignment, comments, rework, correction capture, and audit history.
-- `/verification`: Verification hub with case evidence, validation findings, registry adapter configuration, and adapter runs.
-- `/templates`: Template studio and production extraction pipeline.
-- `/integrations`: Integration center for CBS/LOS/CRM/DMS profiles, webhooks, SFTP batches, retry queue, and payload export.
-- `/analytics`: Accuracy analytics for reviewer corrections, field confidence, and drift.
-- `/admin`: Platform readiness and audit posture for tenant/security operations.
-
-The visual system uses a Corporate Trust treatment: Plus Jakarta Sans typography, slate surfaces, indigo/violet actions, colored elevation shadows, rounded operational cards, a top module switcher instead of a bulky sidebar, and route-level density controls so each module stays focused.
-
-## Run Locally
-
-Backend:
+Install dependencies:
 
 ```bash
 make backend-install
+make frontend-install
+```
+
+Run the backend:
+
+```bash
 make backend-dev
 ```
 
-Frontend:
+Run the frontend:
 
 ```bash
-make frontend-install
 make frontend-dev
 ```
 
-Open `http://localhost:3000`. The frontend expects the API at `http://localhost:8010`.
+Open:
+
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8010`
+- API docs: `http://localhost:8010/docs`
+
+Local defaults use memory storage, local uploads, mock OCR, disabled auth, and disabled Gemma/LipiCore remote calls so the app runs without infrastructure.
 
 ## Verification
+
+Run the full gate before committing:
 
 ```bash
 make test
 ```
 
-Backend only:
+Focused checks:
 
 ```bash
 make backend-test
-```
-
-Frontend only:
-
-```bash
+make frontend-test
 make frontend-build
 ```
 
-## Gemma 4 26B
+## Local OCR/LipiCore Modes
 
-Local development defaults to deterministic fallback so the app works without GPU access:
-
-```bash
-LIPIOCR_GEMMA_ENABLED=false make backend-dev
-```
-
-On the remote server, use the existing vLLM endpoint:
+Mock mode:
 
 ```bash
-LIPIOCR_GEMMA_ENABLED=true
-LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8003/v1
-LIPIOCR_GEMMA_MODEL=gemma-4-26b-4bit
-LIPIOCR_GEMMA_RETRIES=2
-LIPIOCR_GEMMA_REQUIRE_JSON=true
+LIPIOCR_OCR_PROVIDER=mock LIPIOCR_GEMMA_ENABLED=false make backend-dev
 ```
 
-## Production Foundations
-
-LipiOCR now supports production-shaped foundations behind environment flags:
-
-- PostgreSQL-capable repository via `LIPIOCR_REPOSITORY_BACKEND=sql` and `DATABASE_URL`.
-- MinIO/S3 document storage via `LIPIOCR_STORAGE_BACKEND=s3`, `S3_ENDPOINT_URL`, and `S3_BUCKET`.
-- OCR provider selection via `LIPIOCR_OCR_PROVIDER=mock|tesseract|paddleocr|gemma_vision`.
-- Gemma 4 strict JSON extraction with retry/timeout controls.
-- API-key RBAC enforcement via `LIPIOCR_API_AUTH_ENABLED=true` and `LIPIOCR_API_KEYS=key:role,key2:role2`.
-
-Local development keeps `memory`, `local`, `mock`, and auth-disabled defaults so the app runs without infrastructure. The Docker Compose profile defaults to SQL repository and MinIO/S3 storage.
-
-API-key roles:
-
-- `maker`: create cases, upload documents, classify/validate/verify.
-- `checker`: review, approve/reject, export, webhook/review-link handoff.
-- `auditor`: read/audit-oriented role for the next reporting phase.
-- `admin`: all permissions.
-
-## Docker Deployment
-
-Prepare remote files:
+Gemma vision mode:
 
 ```bash
-make remote-sync
+LIPIOCR_OCR_PROVIDER=gemma_vision \
+LIPIOCR_GEMMA_ENABLED=true \
+LIPIOCR_GEMMA_API_BASE=http://127.0.0.1:8003/v1 \
+LIPIOCR_GEMMA_MODEL=gemma-4-26b-4bit \
+make backend-dev
 ```
 
-On the server:
-
-```bash
-cd /data/lipiocr/infra
-cp .env.example .env
-docker compose --env-file .env up -d --build
-```
-
-Default ports:
-
-- Frontend: `http://server:3020`
-- API: `http://server:8020`
-- MinIO API: `http://server:9100`
-- MinIO Console: `http://server:9101`
-
-For locked-down servers, override `LIPIOCR_FRONTEND_PORT`, `LIPIOCR_API_PORT`, `NEXT_PUBLIC_API_BASE_URL`, and `LIPIOCR_CORS_ORIGINS` in `infra/.env`.
-
-## OCR Providers
-
-The local development default provider is `mock`:
-
-```bash
-LIPIOCR_OCR_PROVIDER=mock make backend-dev
-```
-
-Remote deployments should use Gemma vision OCR/ICR when the vLLM endpoint supports image input:
-
-```bash
-LIPIOCR_OCR_PROVIDER=gemma_vision
-LIPIOCR_GEMMA_ENABLED=true
-LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8003/v1
-LIPIOCR_GEMMA_MODEL=gemma-4-26b-4bit
-```
-
-`gemma_vision` sends the full page image to Gemma and asks for every printed or handwritten Nepali/English line as structured OCR evidence. Handwritten lines are retained as `handwriting_ocr` fields for human review and template mapping.
-
-Optional OCR dependencies can be installed later:
+Optional local OCR dependencies:
 
 ```bash
 cd backend
@@ -219,6 +119,79 @@ cd backend
 
 Then run with `LIPIOCR_OCR_PROVIDER=tesseract` or `LIPIOCR_OCR_PROVIDER=paddleocr`.
 
-## Pilot Notes
+## Auth And API Keys
 
-The first demo is intentionally workflow-first. For bank pilots, keep custom training out of scope until real samples, review feedback, accuracy reports, and integration requirements are understood.
+Local development can run with auth disabled:
+
+```bash
+LIPIOCR_API_AUTH_ENABLED=false make backend-dev
+```
+
+When auth is enabled, send an API key:
+
+```bash
+curl http://localhost:8010/api/cases \
+  -H 'X-LipiOCR-API-Key: maker-demo-key'
+```
+
+Or create a session:
+
+```bash
+curl -i -X POST http://localhost:8010/api/auth/session \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"maker.one","role":"maker","tenant_id":"demo-institution"}'
+```
+
+Real deployment keys must be generated and stored outside Git:
+
+```bash
+openssl rand -hex 32
+```
+
+See [Configuration](./docs/configuration.md) for all environment variables.
+
+## Production-Shaped Compose
+
+```bash
+cp infra/.env.example infra/.env
+deploy/scripts/validate-env.sh infra/.env
+make compose-build
+make compose-up
+deploy/scripts/health-check.sh http://localhost:8020
+```
+
+Default Compose ports:
+
+- Frontend: `http://localhost:3020`
+- API: `http://localhost:8020`
+- MinIO API: `127.0.0.1:9100`
+- MinIO Console: `127.0.0.1:9101`
+
+See [Deployment](./docs/deployment.md) and [deploy/compose/README.md](./deploy/compose/README.md) before using this for a real institution.
+
+## Current Production Foundations
+
+Implemented:
+
+- PostgreSQL-capable repository and local memory fallback.
+- S3/MinIO document storage and local upload fallback.
+- OCR provider interface for mock, Tesseract, PaddleOCR, and Gemma vision.
+- Session and API-key auth, RBAC, upload hardening, signed previews.
+- Tenant context, tenant registry, and tenant-scoped object keys.
+- Template studio, drafts, profiles, approval, rollback, import/export, and test runs.
+- Accuracy analytics and benchmark report scaffolding.
+- Signed webhook/SFTP delivery receipts with idempotency keys.
+- Compliance reports, backup readiness, incident response, and DR runbooks.
+- Docker Compose, Helm skeleton, Nginx subpath reference, backup/restore/health scripts.
+
+Still requires institution-specific production integration:
+
+- Real SSO/OIDC/SAML.
+- Real National ID/PAN/VAT/AML/liveness/CBS/LOS/DMS credentials.
+- Real Nepali document accuracy benchmark dataset.
+- External worker orchestration and production migration policy.
+- Per-tenant encryption key management and observability stack.
+
+## Product Boundary
+
+LipiOCR should not claim fully automatic approval, perfect handwriting recognition, fraud detection, signature verification, or direct registry verification unless those adapters are actually configured and tested. The production posture is AI-assisted extraction with human verification, audit controls, and explicit integration states.
