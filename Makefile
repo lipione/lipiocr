@@ -1,4 +1,4 @@
-.PHONY: backend-install backend-dev backend-test frontend-install frontend-dev frontend-build compose-build compose-up compose-down remote-sync test
+.PHONY: backend-install backend-dev backend-test frontend-install frontend-dev frontend-test frontend-build compose-build compose-up compose-down remote-sync test
 
 backend-install:
 	cd backend && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -e '.[test]'
@@ -15,10 +15,13 @@ frontend-install:
 frontend-dev:
 	cd frontend && NEXT_PUBLIC_API_BASE_URL=http://localhost:8010 npm run dev
 
+frontend-test:
+	cd frontend && npm run test
+
 frontend-build:
 	cd frontend && npm run lint && npm run build
 
-test: backend-test frontend-build
+test: backend-test frontend-test frontend-build
 
 compose-build:
 	cd infra && docker compose build
@@ -37,5 +40,7 @@ remote-sync:
 		--exclude 'backend/lipiocr_backend.egg-info' \
 		--exclude 'frontend/node_modules' \
 		--exclude 'frontend/.next' \
+		--exclude 'infra/.env' \
+		--exclude 'storage' \
 		-e 'ssh -i ~/.ssh/lipiocr_codex_ed25519 -p 41447' \
 		./ ekduiteen@202.51.2.50:/data/lipiocr/

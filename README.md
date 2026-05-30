@@ -153,7 +153,7 @@ LipiOCR now supports production-shaped foundations behind environment flags:
 
 - PostgreSQL-capable repository via `LIPIOCR_REPOSITORY_BACKEND=sql` and `DATABASE_URL`.
 - MinIO/S3 document storage via `LIPIOCR_STORAGE_BACKEND=s3`, `S3_ENDPOINT_URL`, and `S3_BUCKET`.
-- OCR provider selection via `LIPIOCR_OCR_PROVIDER=mock|tesseract|paddleocr`.
+- OCR provider selection via `LIPIOCR_OCR_PROVIDER=mock|tesseract|paddleocr|gemma_vision`.
 - Gemma 4 strict JSON extraction with retry/timeout controls.
 - API-key RBAC enforcement via `LIPIOCR_API_AUTH_ENABLED=true` and `LIPIOCR_API_KEYS=key:role,key2:role2`.
 
@@ -189,13 +189,26 @@ Default ports:
 - MinIO API: `http://server:9100`
 - MinIO Console: `http://server:9101`
 
+For locked-down servers, override `LIPIOCR_FRONTEND_PORT`, `LIPIOCR_API_PORT`, `NEXT_PUBLIC_API_BASE_URL`, and `LIPIOCR_CORS_ORIGINS` in `infra/.env`.
+
 ## OCR Providers
 
-The default provider is `mock`:
+The local development default provider is `mock`:
 
 ```bash
 LIPIOCR_OCR_PROVIDER=mock make backend-dev
 ```
+
+Remote deployments should use Gemma vision OCR/ICR when the vLLM endpoint supports image input:
+
+```bash
+LIPIOCR_OCR_PROVIDER=gemma_vision
+LIPIOCR_GEMMA_ENABLED=true
+LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8003/v1
+LIPIOCR_GEMMA_MODEL=gemma-4-26b-4bit
+```
+
+`gemma_vision` sends the full page image to Gemma and asks for every printed or handwritten Nepali/English line as structured OCR evidence. Handwritten lines are retained as `handwriting_ocr` fields for human review and template mapping.
 
 Optional OCR dependencies can be installed later:
 

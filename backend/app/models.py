@@ -58,6 +58,7 @@ class DocumentStatus(str, Enum):
     manual_entry = "manual_entry"
     approved = "approved"
     rejected = "rejected"
+    archived = "archived"
 
 
 class ValidationStatus(str, Enum):
@@ -121,6 +122,11 @@ class ExtractedField(BaseModel):
     extracted_by: str = "deterministic-fallback"
     review_status: ReviewStatus = ReviewStatus.needs_review
     document_id: Optional[str] = None
+    original_ocr_value: Optional[str] = None
+    corrected_value: Optional[str] = None
+    source_field_used: Optional[str] = None
+    correction_confidence: Optional[float] = None
+    audit_reason: Optional[str] = None
 
 
 class ValidationFinding(BaseModel):
@@ -189,6 +195,12 @@ class ReviewRequest(BaseModel):
     field_updates: Dict[str, str] = Field(default_factory=dict)
     decision: str
     note: str = ""
+    document_id: Optional[str] = None
+
+
+class DocumentLinkRequest(BaseModel):
+    case_id: str
+    mode: str = "copy"
 
 
 class TemplateField(BaseModel):
@@ -204,14 +216,88 @@ class DocumentTemplate(BaseModel):
     fields: List[TemplateField]
 
 
+class TemplateProfilePage(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("tplpg"))
+    page_number: int
+    filename: str
+    stored_name: Optional[str] = None
+    image_uri: Optional[str] = None
+    width: int = 1000
+    height: int = 1400
+    ocr_confidence: float = 0.0
+    blocks: List[OcrBlock] = Field(default_factory=list)
+
+
+class TemplateProfileField(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("tplfld"))
+    key: str
+    label: str
+    page_number: int = 1
+    bbox: List[int] = Field(default_factory=lambda: [80, 100, 420, 140])
+    type: str = "text"
+    required: bool = False
+    language_hint: str = "mixed"
+    validation_rule: Optional[str] = None
+    extraction_hint: str = ""
+    confidence: float = 0.0
+
+
+class TemplateDraft(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("tpldraft"))
+    name: str
+    document_type: DocumentType = DocumentType.unknown
+    status: str = "draft"
+    pages: List[TemplateProfilePage] = Field(default_factory=list)
+    fields: List[TemplateProfileField] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TemplateProfile(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("tpl"))
+    name: str
+    document_type: DocumentType = DocumentType.unknown
+    version: int = 1
+    status: str = "published"
+    pages: List[TemplateProfilePage] = Field(default_factory=list)
+    fields: List[TemplateProfileField] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TemplateDraftUpdate(BaseModel):
+    name: Optional[str] = None
+    document_type: Optional[DocumentType] = None
+    fields: Optional[List[TemplateProfileField]] = None
+
+
+class DocumentVersion(BaseModel):
+    version: int
+    action: str
+    filename: str
+    document_type: DocumentType = DocumentType.unknown
+    status: DocumentStatus
+    overall_confidence: float
+    fields_count: int
+    summary: str = ""
+    actor: str = "system"
+    note: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class DocumentRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     filename: str
+    declared_document_type: DocumentType = DocumentType.unknown
     document_type: DocumentType
     status: DocumentStatus
     overall_confidence: float
+    pages: List[OcrPage] = Field(default_factory=list)
     fields: List[ExtractedField]
+    summary: str = ""
+    validation_findings: List[ValidationFinding] = Field(default_factory=list)
     audit_events: List[AuditEvent] = Field(default_factory=list)
+    version_history: List[DocumentVersion] = Field(default_factory=list)
     review: ReviewState = Field(default_factory=ReviewState)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

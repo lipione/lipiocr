@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { formatApiError } from "../src/lib/api-errors.ts";
-import { resolveApiBaseFromConfig } from "../src/lib/api-client.ts";
+import { buildApiInit, resolveApiBaseFromConfig } from "../src/lib/api-client.ts";
 
 test("resolveApiBaseFromConfig returns configured URL", () => {
   assert.equal(
@@ -33,5 +33,11 @@ test("resolveApiBaseFromConfig supports reverse-proxy base path", () => {
 });
 
 test("formatApiError hides raw missing-key JSON", () => {
-  assert.equal(formatApiError(401, '{"detail":"Missing API key"}'), "Operator API key required");
+  assert.equal(formatApiError(401, '{"detail":"Missing API key"}'), "Operator session required");
+});
+
+test("buildApiInit includes credentials for cookie sessions", () => {
+  const init = buildApiInit({ method: "GET" });
+
+  assert.equal(init.credentials, "include");
 });

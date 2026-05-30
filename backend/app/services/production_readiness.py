@@ -24,21 +24,27 @@ def build_ocr_pipeline_profile(settings) -> dict[str, object]:
     providers = [
         {
             "key": "mock",
-            "label": "Deterministic mock OCR",
+            "label": "LipiCore Demo",
             "status": "configured" if active_provider == "mock" else "available",
             "best_for": "Local demos and repeatable tests",
         },
         {
             "key": "tesseract",
-            "label": "Tesseract Nepali/English OCR",
+            "label": "LipiCore Nepali OCR",
             "status": "configured" if active_provider == "tesseract" else "optional",
             "best_for": "Devanagari fallback and low-resource deployments",
         },
         {
             "key": "paddleocr",
-            "label": "PaddleOCR full-page OCR",
+            "label": "LipiCore Printed OCR",
             "status": "configured" if active_provider == "paddleocr" else "optional",
             "best_for": "Modern printed document OCR and layout-aware extraction",
+        },
+        {
+            "key": "gemma_vision",
+            "label": "LipiCore Vision",
+            "status": "configured" if active_provider == "gemma_vision" else "available",
+            "best_for": "Remote full-page Nepali/English OCR plus handwritten field transcription",
         },
     ]
     stages = [
@@ -62,7 +68,7 @@ def build_ocr_pipeline_profile(settings) -> dict[str, object]:
         ],
         "outputs": ["ocr_pages", "text_blocks", "bounding_boxes", "confidence_scores"],
         "production_requirements": [
-            "Install PaddleOCR/Tesseract in the deployment image",
+            "Install local fallback OCR in the deployment image",
             "Run representative Nepali financial documents through accuracy evaluation",
             "Calibrate confidence thresholds from reviewer corrections",
         ],
@@ -87,15 +93,15 @@ def build_platform_status(settings, cases: Iterable[KycCase]) -> dict[str, objec
             "ocr_pipeline",
             "OCR and preprocessing",
             "configured" if active_provider != "mock" else "partial",
-            f"Active provider: {active_provider}",
-            "Install and benchmark PaddleOCR/Tesseract against Nepali KYC packets",
+            "Active provider configured",
+            "Benchmark LipiCore recognition against Nepali KYC packets",
         ),
         _component(
             "gemma_brain",
-            "Gemma 4 26B reasoning",
+            "LipiCore reasoning",
             "configured" if settings.gemma_enabled else "partial",
-            f"Model: {settings.gemma_model}; endpoint: {settings.gemma_api_base}",
-            "Enable remote vLLM endpoint in production env and enforce structured JSON outputs",
+            "Secure reasoning service configured" if settings.gemma_enabled else "Reasoning service ready for production endpoint",
+            "Enable the production reasoning endpoint and enforce structured JSON outputs",
         ),
         _component(
             "persistence",
@@ -229,6 +235,8 @@ def build_operations_dashboard(cases: Iterable[KycCase]) -> dict[str, object]:
 
 
 def build_template_studio() -> dict[str, object]:
+    from app.services.template_profiles import template_profile_summaries
+
     validation_rules = list_validation_rules()
     templates = []
     for template in list_templates():
@@ -269,6 +277,7 @@ def build_template_studio() -> dict[str, object]:
     return {
         "country": "Nepal",
         "templates": templates,
+        "profiles": template_profile_summaries(),
         "extraction_modes": ["template_coordinates", "full_page_reasoning", "human_review"],
         "rules": [
             "Template coordinates are preferred for stable bank forms",

@@ -1,5 +1,5 @@
-import { EnterpriseWorkspace } from "@/components/enterprise-workspace";
+import { ProductHome } from "@/components/product-home";
 
 export default function Page() {
-  return <EnterpriseWorkspace section="command" />;
+  return <ProductHome />;
 }

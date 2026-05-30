@@ -38,8 +38,10 @@ import {
 } from "lucide-react";
 import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { API_BASE, API_KEY_STORAGE_KEY, apiJson, isUnauthorized, listJobs, retryJob, storedApiKey } from "../lib/api-client";
+import { createOperatorSession, loadOperatorSession, logoutOperatorSession, type OperatorPrincipal, type OperatorSessionRequest } from "../lib/auth-client";
+import { API_BASE, apiJson, isUnauthorized, listJobs, retryJob } from "../lib/api-client";
 import { computeTemplateDragBbox, type TemplateDragMode } from "../lib/template-canvas";
+import { LoginPanel } from "./auth/login-panel";
 import { TemplateStudioPanel } from "./templates/template-studio";
 
 import type {
@@ -427,7 +429,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [standaloneFiles, setStandaloneFiles] = useState<File[]>([]);
   const [message, setMessage] = useState("Starting");
-  const [operatorApiKey, setOperatorApiKey] = useState("");
+  const [operatorSession, setOperatorSession] = useState<OperatorPrincipal | null>(null);
   const [accessRequired, setAccessRequired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -620,7 +622,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     selectedCase?.extracted_fields[0] ??
     null;
   const reviewFieldDraftValue = reviewField ? (fieldDrafts[fieldEditorKey(reviewField)] ?? reviewField.value ?? "") : "";
-  const operatorActor = operatorApiKey ? "authenticated.operator" : "operator";
+  const operatorActor = operatorSession?.user_id ?? "operator";
   const accuracyRows = Object.entries(accuracy.data?.field_accuracy ?? {}).slice(0, 5);
   const retryEvent = integrationOps.data?.retry_queue[0] ?? null;
   const isDocumentWorkspace = section === "documents";
@@ -676,15 +678,6 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     },
     [mergeCase],
   );
-
-  useEffect(() => {
-    const savedKey = storedApiKey();
-    setOperatorApiKey(savedKey);
-    if (!savedKey) {
-      setAccessRequired(true);
-      setMessage("Operator API key required");
-    }
-  }, []);
 
   useEffect(() => {
     setManualFieldLabel("");
@@ -745,7 +738,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const handleApiFailure = useCallback((error: unknown, fallbackMessage: string) => {
     if (isUnauthorized(error)) {
       setAccessRequired(true);
-      setMessage("Operator API key required");
+      setOperatorSession(null);
+      setMessage("Operator session required");
       return;
     }
     setMessage(error instanceof Error ? error.message : fallbackMessage);
@@ -754,7 +748,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const markAccessFailure = useCallback((error: unknown) => {
     if (isUnauthorized(error)) {
       setAccessRequired(true);
-      setMessage("Operator API key required");
+      setOperatorSession(null);
+      setMessage("Operator session required");
     }
   }, []);
 
@@ -867,40 +862,61 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   }, []);
 
   const refreshAll = useCallback(async () => {
-    if (!storedApiKey()) {
-      setAccessRequired(true);
-      setMessage("Operator API key required");
-      await loadPublicContext();
-      return;
-    }
     setAccessRequired(false);
     await Promise.all([loadCases(), loadStandaloneDocuments(), loadJobs(), loadEnterpriseContext()]);
-  }, [loadCases, loadJobs, loadPublicContext, loadStandaloneDocuments, loadEnterpriseContext]);
+  }, [loadCases, loadJobs, loadStandaloneDocuments, loadEnterpriseContext]);
 
-  const saveOperatorAccess = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const trimmed = operatorApiKey.trim();
-      if (trimmed) {
-        window.localStorage.setItem(API_KEY_STORAGE_KEY, trimmed);
+  const handleOperatorSignIn = useCallback(
+    async (payload: OperatorSessionRequest) => {
+      setBusy(true);
+      try {
+        const session = await createOperatorSession(payload);
+        setOperatorSession(session.principal);
         setAccessRequired(false);
-        setMessage("Access key saved");
-        void refreshAll();
-        return;
+        setMessage("Operator session active");
+        await refreshAll();
+      } catch (error) {
+        handleApiFailure(error, "Unable to create operator session");
+      } finally {
+        setBusy(false);
       }
-      window.localStorage.removeItem(API_KEY_STORAGE_KEY);
-      setAccessRequired(true);
-      setMessage("Operator API key required");
     },
-    [operatorApiKey, refreshAll],
+    [handleApiFailure, refreshAll],
   );
 
-  const clearOperatorAccess = useCallback(() => {
-    window.localStorage.removeItem(API_KEY_STORAGE_KEY);
-    setOperatorApiKey("");
+  const handleOperatorSignOut = useCallback(async () => {
+    await logoutOperatorSession().catch(() => undefined);
+    setOperatorSession(null);
     setAccessRequired(true);
-    setMessage("Operator API key removed");
-  }, []);
+    setMessage("Operator session required");
+    await loadPublicContext();
+  }, [loadPublicContext]);
+
+  useEffect(() => {
+    let active = true;
+    void loadOperatorSession()
+      .then(async (session) => {
+        if (!active) {
+          return;
+        }
+        setOperatorSession(session.principal);
+        setAccessRequired(false);
+        setMessage("Operator session active");
+        await refreshAll();
+      })
+      .catch(async () => {
+        if (!active) {
+          return;
+        }
+        setOperatorSession(null);
+        setAccessRequired(true);
+        setMessage("Operator session required");
+        await loadPublicContext();
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadPublicContext, refreshAll]);
 
   const loadCaseIntelligence = useCallback(async (caseId: string) => {
     setIntelligence((current) => loadingResource(current));
@@ -2131,50 +2147,13 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
         </div>
       </header>
 
-      {accessRequired ? (
-        <section className="border-b border-amber-200 bg-amber-50/80">
-          <form
-            className="mx-auto flex max-w-[1800px] flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between"
-            onSubmit={saveOperatorAccess}
-          >
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-700 shadow-[var(--shadow-soft)]">
-                <LockKeyhole size={18} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-extrabold text-slate-950">Protected workspace access</p>
-                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                  Enter an operator API key to load applications, documents, review queues, exports, and admin controls.
-                </p>
-              </div>
-            </div>
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:w-96"
-                onChange={(event) => setOperatorApiKey(event.target.value)}
-                placeholder="Operator API key"
-                type="password"
-                value={operatorApiKey}
-              />
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-sm font-bold text-white shadow-[var(--shadow-button)] transition hover:-translate-y-0.5"
-                type="submit"
-              >
-                <ShieldCheck size={16} />
-                Connect
-              </button>
-              {operatorApiKey ? (
-                <button
-                  className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-amber-300 hover:text-amber-700"
-                  onClick={clearOperatorAccess}
-                  type="button"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-          </form>
-        </section>
+      {accessRequired || operatorSession ? (
+        <LoginPanel
+          onSignIn={handleOperatorSignIn}
+          onSignOut={handleOperatorSignOut}
+          session={operatorSession}
+          signingIn={busy}
+        />
       ) : null}
 
       <section className="border-b border-border-soft/80 bg-slate-50/70">

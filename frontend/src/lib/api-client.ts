@@ -61,13 +61,17 @@ export function isUnauthorized(error: unknown) {
 
 export const API_BASE = resolveApiBase();
 
-export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+export function buildApiInit(init?: RequestInit): RequestInit {
   const headers = new Headers(init?.headers);
   const apiKey = storedApiKey();
   if (apiKey && !headers.has("X-LipiOCR-API-Key")) {
     headers.set("X-LipiOCR-API-Key", apiKey);
   }
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  return { ...init, credentials: init?.credentials ?? "include", headers };
+}
+
+export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, buildApiInit(init));
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new ApiRequestError(response.status, formatApiError(response.status, detail));

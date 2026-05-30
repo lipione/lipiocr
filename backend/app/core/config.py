@@ -49,6 +49,27 @@ class Settings(BaseModel):
         "on",
     }
     api_keys: str = os.getenv("LIPIOCR_API_KEYS", "")
+    session_secret: str = os.getenv(
+        "LIPIOCR_SESSION_SECRET",
+        os.getenv("LIPIOCR_API_KEYS", "lipiocr-dev-session-secret"),
+    )
+    session_ttl_seconds: int = int(os.getenv("LIPIOCR_SESSION_TTL_SECONDS", "43200"))
+    session_cookie_name: str = os.getenv("LIPIOCR_SESSION_COOKIE_NAME", "lipiocr_session")
+    default_tenant_id: str = os.getenv("LIPIOCR_DEFAULT_TENANT_ID", "demo-institution")
+    max_upload_bytes: int = int(os.getenv("LIPIOCR_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+    allowed_upload_mime_types: str = os.getenv(
+        "LIPIOCR_ALLOWED_UPLOAD_MIME_TYPES",
+        "application/pdf,image/avif,image/bmp,image/gif,image/jpeg,image/png,image/tiff,image/webp,text/plain",
+    )
+    allowed_upload_extensions: str = os.getenv(
+        "LIPIOCR_ALLOWED_UPLOAD_EXTENSIONS",
+        ".avif,.bmp,.gif,.jpeg,.jpg,.pdf,.png,.tif,.tiff,.txt,.webp",
+    )
+    preview_token_secret: str = os.getenv(
+        "LIPIOCR_PREVIEW_TOKEN_SECRET",
+        os.getenv("LIPIOCR_API_KEYS", "lipiocr-dev-preview-secret"),
+    )
+    preview_token_ttl_seconds: int = int(os.getenv("LIPIOCR_PREVIEW_TOKEN_TTL_SECONDS", "900"))
 
     @property
     def cors_origin_list(self) -> list[str]:

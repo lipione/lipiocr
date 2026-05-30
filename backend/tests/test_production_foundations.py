@@ -135,6 +135,106 @@ def test_checker_permission_required_for_approval_when_auth_enabled():
         settings.api_keys = original_keys
 
 
+def test_sensitive_reads_require_api_key_when_auth_enabled():
+    from app.main import settings
+
+    original_enabled = settings.api_auth_enabled
+    original_keys = settings.api_keys
+    try:
+        settings.api_auth_enabled = True
+        settings.api_keys = "maker-secret:maker,checker-secret:checker,admin-secret:admin"
+
+        assert client.get("/api/cases").status_code == 401
+        assert client.get("/api/documents").status_code == 401
+        assert client.get("/api/review/queue").status_code == 401
+        assert client.get("/api/admin/templates/studio").status_code == 401
+
+        allowed = client.get("/api/documents", headers={"X-LipiOCR-API-Key": "maker-secret"})
+        assert allowed.status_code == 200
+    finally:
+        settings.api_auth_enabled = original_enabled
+        settings.api_keys = original_keys
+
+
+def test_ai_health_is_redacted_publicly_and_detailed_for_admin():
+    from app.main import settings
+
+    original_enabled = settings.api_auth_enabled
+    original_keys = settings.api_keys
+    try:
+        settings.api_auth_enabled = True
+        settings.api_keys = "admin-secret:admin"
+
+        public = client.get("/api/ai/health").json()
+        assert public["provider"] == "LipiCore"
+        assert public["model"] == "LipiCore"
+        assert "api_base" not in public
+        assert "gemma" not in str(public).lower()
+
+        detailed = client.get(
+            "/api/ai/health?detail=internal",
+            headers={"X-LipiOCR-API-Key": "admin-secret"},
+        ).json()
+        assert detailed["model"] == "gemma-4-26b-4bit"
+        assert "api_base" in detailed
+    finally:
+        settings.api_auth_enabled = original_enabled
+        settings.api_keys = original_keys
+
+
+def test_uploaded_preview_uses_safe_name_and_signed_access():
+    from app.main import settings
+
+    original_enabled = settings.api_auth_enabled
+    original_keys = settings.api_keys
+    try:
+        settings.api_auth_enabled = True
+        settings.api_keys = "maker-secret:maker"
+
+        response = client.post(
+            "/api/documents/upload",
+            headers={"X-LipiOCR-API-Key": "maker-secret"},
+            data={"declared_document_type": "unknown"},
+            files={"file": ("../citizenship.jpg", b"\xff\xd8\xff\xe0fake-image", "image/jpeg")},
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        stored_name = body["audit_events"][0]["metadata"]["stored_path"]
+        assert "/" not in stored_name
+        assert "\\" not in stored_name
+        assert ".." not in stored_name
+        assert stored_name.endswith(".jpg")
+
+        image_uri = body["pages"][0]["image_uri"]
+        assert image_uri
+        unsigned_path = image_uri.split("?", 1)[0]
+
+        assert client.get(unsigned_path).status_code == 401
+        assert client.get(f"{unsigned_path}?exp=1&sig=bad").status_code == 401
+
+        signed = client.get(image_uri)
+        assert signed.status_code == 200
+        assert signed.content == b"\xff\xd8\xff\xe0fake-image"
+
+        from app.services.repository import repository
+
+        document = repository.get(body["id"])
+        document.pages[0].image_uri = f"/api/uploads/{stored_name}"
+        repository.save(document)
+
+        refreshed = client.get(
+            f"/api/documents/{body['id']}",
+            headers={"X-LipiOCR-API-Key": "maker-secret"},
+        ).json()
+        refreshed_uri = refreshed["pages"][0]["image_uri"]
+        assert refreshed_uri.startswith(f"/api/uploads/{stored_name}?")
+        assert "sig=" in refreshed_uri
+    finally:
+        settings.api_auth_enabled = original_enabled
+        settings.api_keys = original_keys
+
+
 def test_sql_repository_backend_uses_normalized_tables(tmp_path, monkeypatch):
     from sqlalchemy import inspect
 

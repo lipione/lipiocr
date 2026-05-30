@@ -56,6 +56,49 @@ def test_kyc_intelligence_returns_readiness_checklist_and_gaps():
     assert "review" in body["recommended_action"]
 
 
+def test_unknown_upload_is_auto_classified_and_exposed_as_document_intelligence():
+    case = _create_individual_case()
+    upload = client.post(
+        f"/api/cases/{case['id']}/documents",
+        data={"declared_document_type": "unknown"},
+        files={
+            "file": (
+                "unknown-citizenship.txt",
+                "\n".join(
+                    [
+                        "नेपाल सरकार",
+                        "नेपाली नागरिकताको प्रमाणपत्र",
+                        "नाम थर: सीता शर्मा",
+                        "Name: Sita Sharma",
+                        "जन्म मिति: २०४९/०१/०१",
+                        "ना.प्र.नं.: 27-01-78-12345",
+                    ]
+                ).encode("utf-8"),
+                "text/plain",
+            )
+        },
+    )
+
+    assert upload.status_code == 201
+    updated = upload.json()
+    fields = {field["key"]: field["value"] for field in updated["extracted_fields"]}
+
+    assert updated["documents"][0]["document_type"] == "citizenship"
+    assert fields["full_name_np"] == "सीता शर्मा"
+    assert fields["full_name_en"] == "Sita Sharma"
+    assert fields["dob_ad"] == "1992-04-13"
+    assert fields["dob_bs"] == "2049-01-01"
+
+    intelligence = client.get(f"/api/cases/{case['id']}/intelligence")
+    assert intelligence.status_code == 200
+    body = intelligence.json()
+    document_intelligence = body["document_intelligence"][0]
+
+    assert document_intelligence["document_type"] == "citizenship"
+    assert document_intelligence["canonical_fields"]["citizenship_number"] == "27-01-78-12345"
+    assert document_intelligence["language_pairs"][0]["canonical_key"] == "full_name"
+
+
 def test_split_classify_and_validate_case_packet():
     case = _create_individual_case()
     _upload_citizenship(case["id"])

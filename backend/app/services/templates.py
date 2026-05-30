@@ -1,9 +1,14 @@
+import json
+import os
+from pathlib import Path
 from typing import Dict, List
 
+from app.core.config import get_settings
 from app.models import DocumentTemplate, DocumentType, TemplateField
 
 
 VALIDATION_RULES: Dict[DocumentType, List[Dict[str, object]]] = {}
+_PERSISTED_LOADED = False
 
 
 TEMPLATES: Dict[DocumentType, DocumentTemplate] = {
@@ -132,11 +137,72 @@ TEMPLATES: Dict[DocumentType, DocumentTemplate] = {
 }
 
 
+def _template_store_enabled() -> bool:
+    configured = os.getenv("LIPIOCR_LOAD_TEMPLATE_STORE", "").strip().lower()
+    if configured:
+        return configured in {"1", "true", "yes", "on"}
+    if os.getenv("LIPIOCR_TEMPLATE_STORE"):
+        return True
+    return get_settings().environment.lower() in {"production", "staging"}
+
+
+def _template_store_path() -> Path:
+    configured = os.getenv("LIPIOCR_TEMPLATE_STORE", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(get_settings().upload_dir) / "_template_studio.json"
+
+
+def _load_persisted_templates() -> None:
+    global _PERSISTED_LOADED
+    if _PERSISTED_LOADED or not _template_store_enabled():
+        return
+    _PERSISTED_LOADED = True
+    path = _template_store_path()
+    if not path.exists():
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    for raw_template in payload.get("templates", []):
+        try:
+            template = DocumentTemplate.model_validate(raw_template)
+        except Exception:
+            continue
+        TEMPLATES[template.document_type] = template
+
+    raw_rules = payload.get("validation_rules", {})
+    if isinstance(raw_rules, dict):
+        for document_type_value, rules in raw_rules.items():
+            try:
+                document_type = DocumentType(str(document_type_value))
+            except ValueError:
+                continue
+            if isinstance(rules, list):
+                VALIDATION_RULES[document_type] = rules
+
+
+def _persist_templates() -> None:
+    if not _template_store_enabled():
+        return
+    path = _template_store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "templates": [template.model_dump(mode="json") for template in TEMPLATES.values()],
+        "validation_rules": {key.value: value for key, value in VALIDATION_RULES.items()},
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+
 def list_templates() -> List[DocumentTemplate]:
+    _load_persisted_templates()
     return list(TEMPLATES.values())
 
 
 def get_template(document_type: DocumentType) -> DocumentTemplate:
+    _load_persisted_templates()
     return TEMPLATES[document_type]
 
 
@@ -147,8 +213,10 @@ def upsert_template(
     fields: List[TemplateField],
     validation_rules: List[Dict[str, object]],
 ) -> Dict[str, object]:
+    _load_persisted_templates()
     TEMPLATES[document_type] = DocumentTemplate(document_type=document_type, name=name, fields=fields)
     VALIDATION_RULES[document_type] = validation_rules
+    _persist_templates()
     return {
         "template": {
             "document_type": document_type.value,
@@ -163,4 +231,5 @@ def upsert_template(
 
 
 def list_validation_rules() -> Dict[str, List[Dict[str, object]]]:
+    _load_persisted_templates()
     return {key.value: value for key, value in VALIDATION_RULES.items()}

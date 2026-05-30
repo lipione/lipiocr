@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict
 
 from fastapi import HTTPException, Request
 
-
-ROLE_PERMISSIONS: Dict[str, set[str]] = {
-    "maker": {"create_case", "upload_document", "edit_fields", "submit_review", "view_case"},
-    "checker": {"view_case", "review_case", "approve_case", "reject_case", "export_case"},
-    "auditor": {"view_case", "view_audit", "export_audit"},
-    "admin": {"*"},
-    "system": {"*"},
-}
-
-
-@dataclass(frozen=True)
-class Principal:
-    role: str
-    api_key_fingerprint: str
+from app.security.rbac import (
+    ROLE_PERMISSIONS,
+    Principal,
+    require_any_permission_for_principal,
+    require_permission_for_principal,
+)
+from app.security.sessions import session_store_from_settings
 
 
 def _api_key_map(api_keys: str) -> Dict[str, str]:
@@ -36,26 +28,61 @@ def _fingerprint(api_key: str) -> str:
     return f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "short-key"
 
 
-def resolve_principal(settings, request: Request) -> Principal:
-    if not settings.api_auth_enabled:
-        return Principal(role="system", api_key_fingerprint="auth-disabled")
-
-    api_key = request.headers.get("X-LipiOCR-API-Key", "")
+def _bearer_token(request: Request) -> str:
     auth_header = request.headers.get("Authorization", "")
-    if not api_key and auth_header.lower().startswith("bearer "):
-        api_key = auth_header[7:].strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return ""
+
+
+def _session_token(settings, request: Request) -> str:
+    cookie_name = getattr(settings, "session_cookie_name", "lipiocr_session")
+    return request.cookies.get(cookie_name, "") or _bearer_token(request)
+
+
+def _api_key(request: Request) -> str:
+    return request.headers.get("X-LipiOCR-API-Key", "") or _bearer_token(request)
+
+
+def resolve_principal(settings, request: Request) -> Principal:
+    default_tenant_id = getattr(settings, "default_tenant_id", "demo-institution")
+    if not settings.api_auth_enabled:
+        return Principal(
+            role="system",
+            user_id="auth-disabled",
+            tenant_id=default_tenant_id,
+            branch_code=None,
+            auth_method="disabled",
+            api_key_fingerprint="auth-disabled",
+        )
+
+    session_token = _session_token(settings, request)
+    session_principal = session_store_from_settings(settings).verify(session_token)
+    if session_principal is not None:
+        return Principal.from_session(session_principal)
+
+    api_key = _api_key(request)
     if not api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
+        raise HTTPException(status_code=401, detail="Missing operator session")
 
     role = _api_key_map(settings.api_keys).get(api_key)
     if role is None:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    return Principal(role=role, api_key_fingerprint=_fingerprint(api_key))
+        raise HTTPException(status_code=401, detail="Invalid operator credentials")
+
+    fingerprint = _fingerprint(api_key)
+    return Principal(
+        role=role,
+        user_id=f"api-key:{fingerprint}",
+        tenant_id=default_tenant_id if role != "system" else "system",
+        branch_code=None,
+        auth_method="api_key",
+        api_key_fingerprint=fingerprint,
+    )
 
 
 def require_permission(settings, request: Request, permission: str) -> Principal:
-    principal = resolve_principal(settings, request)
-    permissions = ROLE_PERMISSIONS.get(principal.role, set())
-    if "*" not in permissions and permission not in permissions:
-        raise HTTPException(status_code=403, detail=f"Role {principal.role} lacks {permission}")
-    return principal
+    return require_permission_for_principal(resolve_principal(settings, request), permission)
+
+
+def require_any_permission(settings, request: Request, permissions: set[str]) -> Principal:
+    return require_any_permission_for_principal(resolve_principal(settings, request), permissions)

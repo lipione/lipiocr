@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Iterable
 
 from app.models import AuditEvent, CaseType, DocumentType, KycCase, ValidationFinding
+from app.services.document_intelligence import analyze_document, classify_document, compare_person_names
 
 
 CHECKLISTS: dict[CaseType, list[dict[str, object]]] = {
@@ -267,8 +268,69 @@ def _readiness_score(checklist: Iterable[dict[str, object]]) -> int:
     return round((passed / len(required)) * 100)
 
 
+def _merged_canonical_fields(document_intelligence: list[dict[str, object]]) -> dict[str, str]:
+    merged: dict[str, str] = {}
+    for document_analysis in document_intelligence:
+        canonical_fields = document_analysis.get("canonical_fields", {})
+        if not isinstance(canonical_fields, dict):
+            continue
+        for key, value in canonical_fields.items():
+            if isinstance(key, str) and isinstance(value, str) and key not in merged:
+                merged[key] = value
+    return merged
+
+
+def _entity_reconciliation(document_intelligence: list[dict[str, object]]) -> list[dict[str, object]]:
+    candidates: list[dict[str, str]] = []
+    for document_analysis in document_intelligence:
+        canonical_fields = document_analysis.get("canonical_fields", {})
+        if not isinstance(canonical_fields, dict):
+            continue
+        for field_key in ("full_name_en", "name_en", "full_name_np", "name_ne"):
+            value = canonical_fields.get(field_key)
+            if isinstance(value, str) and value.strip():
+                candidates.append(
+                    {
+                        "document_id": str(document_analysis.get("document_id") or ""),
+                        "filename": str(document_analysis.get("filename") or ""),
+                        "field_key": field_key,
+                        "value": value,
+                    }
+                )
+                break
+
+    reconciliations: list[dict[str, object]] = []
+    for left_index, left in enumerate(candidates):
+        for right in candidates[left_index + 1 :]:
+            if left["document_id"] == right["document_id"]:
+                continue
+            comparison = compare_person_names(left["value"], right["value"])
+            if float(comparison["confidence"]) < 0.45:
+                continue
+            reconciliations.append(
+                {
+                    "left_document_id": left["document_id"],
+                    "right_document_id": right["document_id"],
+                    "left_filename": left["filename"],
+                    "right_filename": right["filename"],
+                    "left_field": left["field_key"],
+                    "right_field": right["field_key"],
+                    "left_value": left["value"],
+                    "right_value": right["value"],
+                    "left_normalized": comparison["left_normalized"],
+                    "right_normalized": comparison["right_normalized"],
+                    "status": comparison["status"],
+                    "confidence": comparison["confidence"],
+                    "reason": comparison["reason"],
+                }
+            )
+
+    return sorted(reconciliations, key=lambda item: float(item["confidence"]), reverse=True)
+
+
 def build_case_intelligence(case: KycCase) -> dict[str, object]:
     checklist = build_checklist(case)
+    document_intelligence = [analyze_document(document) for document in case.documents]
     readiness_score = _readiness_score(checklist)
     gaps = [item["key"] for item in checklist if item.get("required") and not item.get("satisfied")]
     if readiness_score == 100:
@@ -287,6 +349,33 @@ def build_case_intelligence(case: KycCase) -> dict[str, object]:
         "risk_score": {"low": 25, "medium": 55, "high": 85}.get(case.risk_level.value, 55),
         "summary": f"{case.applicant_name} has {readiness_score}% required KYC packet readiness.",
         "checklist": checklist,
+        "document_intelligence": document_intelligence,
+        "canonical_fields": _merged_canonical_fields(document_intelligence),
+        "language_pairs": [
+            pair
+            for document_analysis in document_intelligence
+            for pair in document_analysis.get("language_pairs", [])
+        ],
+        "normalizations": {
+            key: value
+            for document_analysis in document_intelligence
+            for key, value in (
+                document_analysis.get("normalizations", {}).items()
+                if isinstance(document_analysis.get("normalizations"), dict)
+                else []
+            )
+        },
+        "confidence_repairs": [
+            repair
+            for document_analysis in document_intelligence
+            for repair in document_analysis.get("confidence_repairs", [])
+        ],
+        "entity_reconciliation": _entity_reconciliation(document_intelligence),
+        "cross_checks": [
+            check
+            for document_analysis in document_intelligence
+            for check in document_analysis.get("cross_checks", [])
+        ],
         "policy_signals": [
             {
                 "key": "maker_checker",
@@ -314,22 +403,12 @@ def build_case_intelligence(case: KycCase) -> dict[str, object]:
 
 
 def infer_document_type(document) -> tuple[DocumentType, float, str]:
-    if document.declared_document_type != DocumentType.unknown:
-        return document.declared_document_type, 0.91, "declared document type supplied by uploader"
-
-    text = _document_text(document).lower()
-    scores: Counter[DocumentType] = Counter()
-    for document_type, keywords in KEYWORDS.items():
-        for keyword in keywords:
-            if keyword in text:
-                scores[document_type] += 1
-
-    if not scores:
-        return DocumentType.unknown, 0.35, "no strong OCR keywords matched"
-
-    predicted, score = scores.most_common(1)[0]
-    confidence = min(0.95, 0.62 + score * 0.11)
-    return predicted, round(confidence, 2), f"matched {score} OCR keyword signal(s)"
+    analysis = classify_document(document)
+    return (
+        DocumentType(str(analysis["document_type"])),
+        float(analysis["confidence"]),
+        str(analysis["reason"]),
+    )
 
 
 def build_split_preview(case: KycCase) -> dict[str, object]:

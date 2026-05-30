@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Sequence
 
 from app.models import (
     CaseType,
@@ -14,23 +14,69 @@ from app.models import (
     ValidationFinding,
     ValidationStatus,
 )
+from app.services.calendar_intelligence import apply_calendar_intelligence
+from app.services.document_intelligence import apply_document_intelligence
 from app.services.gemma import GemmaExtractionResult, GemmaReasoningClient
 from app.services.validation import validate_field
 
 
-def _pages_from_text_lines(lines: List[tuple[str, float]], filename: str) -> List[OcrPage]:
+DEVANAGARI_DIGIT_TRANSLATION = str.maketrans("०१२३४५६७८९", "0123456789")
+DATE_VALUE_PATTERN = r"(\d{2,4}[-\/.]\d{1,2}[-\/.]\d{1,2})"
+IDENTIFIER_VALUE_PATTERN = r"([\w\-\/]+)"
+GENERIC_LABEL_VALUE_PATTERNS = (
+    re.compile(r"^\s*(?P<label>[^:：]{2,96})\s*[:：]\s*(?P<value>.{1,240})\s*$"),
+    re.compile(
+        r"^\s*(?P<label>[^\n._:：]{2,96}?)\s*(?:\.{2,}|_{2,}|[-–—]{1})\s*(?P<value>.{1,240})\s*$"
+    ),
+)
+GENERIC_FIELD_ALIASES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("full_name_np", "Full Name (Nepali)", ("नाम थर", "आवेदकको नाम")),
+    ("full_name_en", "Full Name (English)", ("full name", "customer name", "name")),
+    ("applicant_name", "Applicant Name", ("applicant name", "applicant's full name")),
+    ("father_name_np", "Father Name (Nepali)", ("बाबुको नाम", "बुबाको नाम", "पिताको नाम")),
+    ("father_name_en", "Father Name (English)", ("father name", "father's name")),
+    ("mother_name_np", "Mother Name (Nepali)", ("आमाको नाम", "माताको नाम")),
+    ("mother_name_en", "Mother Name (English)", ("mother name", "mother's name")),
+    ("address_np", "Address (Nepali)", ("ठेगाना", "स्थायी वासस्थान", "स्थायी ठेगाना")),
+    ("address_en", "Address (English)", ("address", "permanent address", "current address")),
+    ("dob_bs", "Date of Birth (BS)", ("जन्म मिति",)),
+    ("dob_ad", "Date of Birth (AD)", ("date of birth", "dob", "d.o.b")),
+    ("issue_date_bs", "Date of Issue (BS)", ("जारी मिति",)),
+    ("issue_date_ad", "Date of Issue (AD)", ("date of issue", "issue date")),
+    ("citizenship_number", "Citizenship Number", ("citizenship no", "citizenship number", "ना.प्र.नं", "ना प्र नं")),
+    ("national_id_number", "National ID Number", ("national id no", "national id number", "परिचयपत्र नं")),
+    ("passport_number", "Passport Number", ("passport no", "passport number")),
+    ("license_number", "License Number", ("d.l.no", "dl no", "license no", "license number")),
+    ("mobile", "Mobile Number", ("mobile no", "mobile", "phone no", "contact no", "सम्पर्क फोन नं")),
+    ("email", "Email", ("email", "e-mail", "इमेल")),
+    ("account_number", "Account Number", ("bank account no", "account no", "account number", "खाता नम्बर")),
+    ("requested_amount", "Requested Amount", ("requested amount", "loan amount", "amount requested")),
+    ("amount", "Amount", ("amount", "amount deposited", "total amount", "रकम")),
+    ("dp_id", "DP ID", ("dp id", "depository participant id")),
+    ("client_id", "Client ID", ("client id", "client no")),
+    ("boid", "BOID", ("boid", "bo id", "demat no", "beneficiary id")),
+)
+
+
+def _pages_from_text_lines(lines: List[Sequence[object]], filename: str) -> List[OcrPage]:
     if not lines:
         lines = [(f"Uploaded scanned document: {filename}. Full OCR pending for binary page image.", 0.40)]
 
     blocks: List[OcrBlock] = []
-    for index, (line, confidence) in enumerate(lines, start=1):
+    for index, line_item in enumerate(lines, start=1):
+        line = str(line_item[0])
+        confidence = float(line_item[1])
+        block_type = str(line_item[2]) if len(line_item) > 2 else "text"
+        language = str(line_item[3]) if len(line_item) > 3 else "mixed"
+        bbox = line_item[4] if len(line_item) > 4 else None
         y1 = 100 + (index - 1) * 48
         blocks.append(
             OcrBlock(
                 text=line,
-                bbox=[80, y1, 920, y1 + 34],
+                bbox=bbox if isinstance(bbox, list) else [80, y1, 920, y1 + 34],
                 confidence=round(float(confidence), 2),
-                block_type="text",
+                block_type=block_type,
+                language=language,
             )
         )
 
@@ -63,10 +109,17 @@ def build_pages_from_upload(
             if not text_value:
                 continue
             field_key = str(observation.get("field_key") or "").strip()
-            if field_key and field_key != "raw_text":
-                label = field_key.replace("_", " ").title()
-                text_value = f"{label}: {text_value}"
-            lines.append((text_value, float(observation.get("confidence") or 0.50)))
+            block_type = str(observation.get("block_type") or "text")
+            language = str(observation.get("language") or "mixed")
+            bbox = observation.get("bbox")
+            for raw_line in text_value.splitlines() or [text_value]:
+                line_value = raw_line.strip()
+                if not line_value:
+                    continue
+                if field_key and field_key != "raw_text":
+                    label = field_key.replace("_", " ").title()
+                    line_value = f"{label}: {line_value}"
+                lines.append((line_value, float(observation.get("confidence") or 0.50), block_type, language, bbox))
         if lines:
             return _pages_from_text_lines(lines, filename)
 
@@ -84,7 +137,80 @@ def _first_bbox(pages: List[OcrPage]) -> List[int]:
 
 
 def _clean_value(value: str) -> str:
-    return re.sub(r"\s+", " ", value.strip().strip(":-|,;"))
+    return re.sub(r"\s+", " ", value.strip().strip(":-|,;")).translate(DEVANAGARI_DIGIT_TRANSLATION)
+
+
+def _normalize_generic_label(label: str) -> str:
+    normalized = _clean_value(label).lower()
+    normalized = re.sub(r"[#().,/]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def _canonical_generic_field(label: str) -> Optional[tuple[str, str]]:
+    normalized_label = _normalize_generic_label(label)
+    if not normalized_label:
+        return None
+
+    scored: list[tuple[int, str, str]] = []
+    for key, display_label, aliases in GENERIC_FIELD_ALIASES:
+        for alias in aliases:
+            normalized_alias = _normalize_generic_label(alias)
+            if normalized_label == normalized_alias:
+                scored.append((100 + len(normalized_alias), key, display_label))
+            elif normalized_alias and normalized_alias in normalized_label:
+                scored.append((50 + len(normalized_alias), key, display_label))
+
+    if not scored:
+        return None
+    _, key, display_label = max(scored, key=lambda item: item[0])
+    return key, display_label
+
+
+def _known_prefix_label_value(line: str) -> Optional[tuple[str, str, str, str]]:
+    alias_rows = sorted(
+        (
+            (alias, key, display_label)
+            for key, display_label, aliases in GENERIC_FIELD_ALIASES
+            for alias in aliases
+        ),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+    for alias, key, display_label in alias_rows:
+        pattern = re.compile(
+            rf"^\s*(?P<label>{re.escape(alias)})\s*(?:[:：#.\-–—_]+|\s+)(?P<value>.{{1,240}})\s*$",
+            flags=0 if re.search(r"[\u0900-\u097F]", alias) else re.IGNORECASE,
+        )
+        match = pattern.match(line)
+        if not match:
+            continue
+        value = _clean_value(match.group("value"))
+        if value:
+            return match.group("label").strip(), value, key, display_label
+    return None
+
+
+def _parse_generic_label_value(line: str) -> Optional[tuple[str, str, Optional[str], Optional[str]]]:
+    for pattern in GENERIC_LABEL_VALUE_PATTERNS:
+        match = pattern.match(line)
+        if not match:
+            continue
+        label = _clean_value(match.group("label"))
+        value = _clean_value(match.group("value"))
+        if not label or not value:
+            continue
+        canonical = _canonical_generic_field(label)
+        if canonical:
+            key, display_label = canonical
+            return label, value, key, display_label
+        return label, value, None, None
+
+    known = _known_prefix_label_value(line)
+    if known:
+        label, value, key, display_label = known
+        return label, value, key, display_label
+    return None
 
 
 def _match_value(text: str, patterns: Iterable[str]) -> str:
@@ -100,7 +226,7 @@ def _evidence_line(text: str, value: str, fallback: str) -> str:
         return fallback
     normalized_value = value.lower()
     for line in text.splitlines():
-        if normalized_value in line.lower():
+        if normalized_value in line.lower() or normalized_value in _clean_value(line).lower():
             return line.strip()
     return fallback
 
@@ -196,6 +322,129 @@ def _field(
     )
 
 
+def _normalized_ocr_line(line: str) -> str:
+    return re.sub(r"\s+", " ", line.strip()).lower()
+
+
+def _ocr_line_label(line: str, index: int) -> str:
+    label_candidate = re.split(r"[:：]", line, maxsplit=1)[0].strip()
+    if label_candidate and label_candidate != line and len(label_candidate) <= 64:
+        return _clean_value(label_candidate)
+    return f"OCR Line {index:03d}"
+
+
+def _append_full_page_ocr_fields(
+    *,
+    fields: List[ExtractedField],
+    pages: List[OcrPage],
+    document_id: str,
+) -> None:
+    seen: set[str] = set()
+    line_index = 1
+    for page in pages:
+        for block in page.blocks:
+            for raw_line in block.text.splitlines():
+                line = raw_line.strip()
+                normalized = _normalized_ocr_line(line)
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                is_handwriting = block.block_type == "handwriting"
+                fields.append(
+                    ExtractedField(
+                        key=f"ocr_line_{line_index:03d}",
+                        label=_ocr_line_label(line, line_index),
+                        value=line,
+                        confidence=round(float(block.confidence), 2),
+                        required=False,
+                        source="handwriting_ocr" if is_handwriting else "full_page_ocr",
+                        validation_status=ValidationStatus.warning,
+                        validation_message=(
+                            "Handwritten OCR text retained for reviewer/template mapping."
+                            if is_handwriting
+                            else "Full-page OCR text retained for reviewer/template mapping."
+                        ),
+                        bbox=block.bbox,
+                        evidence=EvidenceRef(
+                            document_id=document_id,
+                            source_page=page.page_number,
+                            bbox=block.bbox,
+                            evidence_text=line,
+                        ),
+                        extracted_by="full-page-ocr",
+                        document_id=document_id,
+                    )
+                )
+                line_index += 1
+
+
+def _generic_field_key(label: str, fallback_index: int) -> str:
+    canonical = _canonical_generic_field(label)
+    if canonical:
+        return canonical[0]
+    key = _clean_value(label).lower()
+    key = re.sub(r"[^a-z0-9]+", "_", key).strip("_")
+    return key[:64] or f"generic_field_{fallback_index:03d}"
+
+
+def _append_generic_label_value_fields(
+    *,
+    fields: List[ExtractedField],
+    pages: List[OcrPage],
+    document_id: str,
+) -> None:
+    existing_keys = {field.key for field in fields}
+    used_keys = set(existing_keys)
+    generic_index = 1
+
+    for page in pages:
+        for block in page.blocks:
+            for raw_line in block.text.splitlines():
+                line = raw_line.strip()
+                parsed = _parse_generic_label_value(line)
+                if not parsed:
+                    continue
+
+                label, value, canonical_key, canonical_label = parsed
+                if not label or not value:
+                    continue
+
+                base_key = canonical_key or _generic_field_key(label, generic_index)
+                if base_key in existing_keys or base_key.startswith("ocr_line_"):
+                    continue
+
+                key = base_key
+                suffix = 2
+                while key in used_keys:
+                    key = f"{base_key}_{suffix}"
+                    suffix += 1
+                used_keys.add(key)
+
+                validation = validate_field(key, value, "unknown")
+                fields.append(
+                    ExtractedField(
+                        key=key,
+                        label=canonical_label or label,
+                        value=value,
+                        confidence=round(min(0.74, float(block.confidence)), 2),
+                        required=False,
+                        source="generic_field_extraction",
+                        validation_status=ValidationStatus(validation["status"]),
+                        validation_message=validation["message"],
+                        bbox=block.bbox,
+                        evidence=EvidenceRef(
+                            document_id=document_id,
+                            source_page=page.page_number,
+                            bbox=block.bbox,
+                            evidence_text=line,
+                        ),
+                        extracted_by="LipiCore",
+                        document_id=document_id,
+                    )
+                )
+                generic_index += 1
+
+
 FieldSpec = tuple[str, str, tuple[str, ...], bool]
 
 
@@ -205,26 +454,26 @@ FIELD_SPECS: dict[DocumentType, tuple[FieldSpec, ...]] = {
         (
             "citizenship_number",
             "Citizenship Number",
-            (r"^\s*(?:Citizenship\s*(?:No|Number)|Ctz\.?\s*No|ना\.?\s*प्र\.?\s*नं\.?)\s*[:#.\-]*\s*([A-Za-z0-9\-\/]+)",),
+            (rf"^\s*(?:Citizenship\s*(?:No|Number)|Ctz\.?\s*No|ना\.?\s*प्र\.?\s*नं\.?)\s*[:#.\-]*\s*{IDENTIFIER_VALUE_PATTERN}",),
             True,
         ),
-        ("dob", "Date of Birth", (r"^\s*(?:Date of Birth|DOB|D\.O\.B\.|जन्म मिति)\s*[:.\-]*\s*([0-9]{4}[-\/][0-9]{2}[-\/][0-9]{2})",), True),
-        ("address", "Address", (r"^\s*(?:Address|Permanent Address|ठेगाना)\s*[:\-]?\s*([^\n]+)",), True),
-        ("father_mother_name", "Father/Mother Name", (r"^\s*(?:Father/Mother Name|Father Name|Mother Name|बाबु|आमा)\s*[:\-]?\s*([^\n]+)",), False),
+        ("dob", "Date of Birth", (rf"^\s*(?:Date of Birth|DOB|D\.O\.B\.|जन्म मिति)\s*[:.\-]*\s*{DATE_VALUE_PATTERN}",), True),
+        ("address", "Address", (r"^\s*(?:Address|Permanent Address|ठेगाना|स्थायी वासस्थान)\s*[:\-]?\s*([^\n]+)",), True),
+        ("father_mother_name", "Father/Mother Name", (r"^\s*(?:Father/Mother Name|Father Name|Mother Name|बाबुको नाम थर|आमाको नाम थर|बाबु|आमा)\s*[:\-]?\s*([^\n]+)",), False),
     ),
     DocumentType.national_id: (
         (
             "national_id_number",
             "National ID Number",
-            (r"^\s*(?:National ID No|National ID Number|NIN|ID No)\s*[:#.\-]*\s*([A-Za-z0-9\-\/]+)",),
+            (rf"^\s*(?:National ID No|National ID Number|NIN|ID No|परिचयपत्र नं)\s*[:#.\-]*\s*{IDENTIFIER_VALUE_PATTERN}",),
             True,
         ),
-        ("full_name", "Full Name", (r"^\s*(?:Name|Full Name|Given Name)\s*[:\-]?\s*([^\n]+)",), True),
+        ("full_name", "Full Name", (r"^\s*(?:Name|Full Name|Given Name|नाम थर)\s*[:\-]?\s*([^\n]+)",), True),
         ("gender", "Gender", (r"^\s*(?:Sex|Gender)\s*[:\-]?\s*([A-Za-z]+)",), True),
-        ("dob", "Date of Birth", (r"^\s*(?:Date of Birth|DOB)\s*[:.\-]*\s*([0-9]{4}[-\/][0-9]{2}[-\/][0-9]{2})",), True),
-        ("issue_date", "Date of Issue", (r"^\s*(?:Date of Issue|Issue Date)\s*[:.\-]*\s*([0-9]{2,4}[-\/][0-9]{2}[-\/][0-9]{2,4})",), False),
-        ("mother_name", "Mother Name", (r"^\s*(?:Mother's Name|Mother Name)\s*[:\-]?\s*([^\n]+)",), False),
-        ("father_name", "Father Name", (r"^\s*(?:Father's Name|Father Name)\s*[:\-]?\s*([^\n]+)",), False),
+        ("dob", "Date of Birth", (rf"^\s*(?:Date of Birth|DOB|जन्म मिति)\s*[:.\-]*\s*{DATE_VALUE_PATTERN}",), True),
+        ("issue_date", "Date of Issue", (rf"^\s*(?:Date of Issue|Issue Date|जारी मिति)\s*[:.\-]*\s*{DATE_VALUE_PATTERN}",), False),
+        ("mother_name", "Mother Name", (r"^\s*(?:Mother's Name|Mother Name|आमाको नाम)\s*[:\-]?\s*([^\n]+)",), False),
+        ("father_name", "Father Name", (r"^\s*(?:Father's Name|Father Name|बाबुको नाम)\s*[:\-]?\s*([^\n]+)",), False),
     ),
     DocumentType.passport: (
         ("passport_number", "Passport Number", (r"^\s*(?:Passport No|Passport Number)\s*[:#.\-]*\s*([A-Za-z0-9]+)",), True),
@@ -353,6 +602,9 @@ def fallback_extraction(
         document_id=document.id,
     )
 
+    if inferred_type == DocumentType.unknown or not fields:
+        _append_generic_label_value_fields(fields=fields, pages=document.pages, document_id=document.id)
+
     has_full_name = any(field.key in {"full_name", "applicant_name"} and field.value for field in fields)
     if case_type == CaseType.individual_kyc and not has_full_name:
         fields.append(
@@ -367,6 +619,8 @@ def fallback_extraction(
             )
         )
 
+    _append_full_page_ocr_fields(fields=fields, pages=document.pages, document_id=document.id)
+
     findings = [
         ValidationFinding(
             severity="warning",
@@ -377,7 +631,7 @@ def fallback_extraction(
     ]
     return GemmaExtractionResult(
         document_type=inferred_type,
-        summary=f"Processed {inferred_type.value} for Nepal financial KYC.",
+        summary=f"Processed {inferred_type.value} for Nepal financial KYC with full-page OCR evidence.",
         fields=fields,
         findings=findings,
     )
@@ -423,8 +677,8 @@ async def process_enterprise_document(
         result.findings.append(
             ValidationFinding(
                 severity="warning",
-                code="gemma_unavailable",
-                message=f"Gemma 4 26B extraction fell back to deterministic extraction: {exc}",
+                code="lipicore_unavailable",
+                message=f"LipiCore extraction fell back to deterministic extraction: {exc}",
                 document_id=document.id,
             )
         )
@@ -436,19 +690,26 @@ async def process_enterprise_document(
             document=document,
         )
 
+    if not any(field.source in {"full_page_ocr", "handwriting_ocr"} for field in result.fields):
+        _append_full_page_ocr_fields(fields=result.fields, pages=document.pages, document_id=document.id)
+
     document.document_type = result.document_type
     document.summary = result.summary
     document.status = DocumentStatus.processed
 
     for field in result.fields:
         field.document_id = document.id
-        field.extracted_by = field.extracted_by or gemma_client.settings.gemma_model
+        field.extracted_by = field.extracted_by or "LipiCore"
         field.evidence.document_id = document.id
-        validation = validate_field(field.key, field.value, result.document_type.value)
-        field.validation_status = ValidationStatus(validation["status"])
-        field.validation_message = validation["message"]
+        if field.source not in {"full_page_ocr", "handwriting_ocr"}:
+            validation = validate_field(field.key, field.value, result.document_type.value)
+            field.validation_status = ValidationStatus(validation["status"])
+            field.validation_message = validation["message"]
         if field.evidence.bbox and not field.bbox:
             field.bbox = field.evidence.bbox
+
+    apply_document_intelligence(document, result.fields)
+    apply_calendar_intelligence(result.fields, document_id=document.id)
 
     for finding in result.findings:
         finding.document_id = finding.document_id or document.id

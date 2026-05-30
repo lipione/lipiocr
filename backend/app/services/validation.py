@@ -57,7 +57,7 @@ def validate_field(key: str, value: str, document_type: str) -> Dict[str, str]:
             return {"status": "valid", "message": "OK"}
         return {"status": "invalid", "message": "Identifier contains unsupported characters"}
 
-    if key in {"dob", "date", "issue_date", "expiry_date"}:
+    if key in {"dob", "date", "issue_date", "expiry_date"} or key.endswith(("_ad", "_bs")):
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
             return {"status": "valid", "message": "OK"}
         return {"status": "warning", "message": "Date should use YYYY-MM-DD"}

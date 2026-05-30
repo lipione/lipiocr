@@ -10,24 +10,27 @@ services:
       LIPIOCR_UPLOAD_DIR: /app/storage/uploads
       LIPIOCR_REPOSITORY_BACKEND: ${LIPIOCR_REPOSITORY_BACKEND:-sql}
       LIPIOCR_STORAGE_BACKEND: ${LIPIOCR_STORAGE_BACKEND:-s3}
-      LIPIOCR_OCR_PROVIDER: ${LIPIOCR_OCR_PROVIDER:-mock}
+      LIPIOCR_OCR_PROVIDER: ${LIPIOCR_OCR_PROVIDER:-gemma_vision}
       LIPIOCR_GEMMA_ENABLED: ${LIPIOCR_GEMMA_ENABLED:-true}
       LIPIOCR_GEMMA_API_BASE: ${LIPIOCR_GEMMA_API_BASE:-http://host.docker.internal:8003/v1}
       LIPIOCR_GEMMA_MODEL: ${LIPIOCR_GEMMA_MODEL:-gemma-4-26b-4bit}
+      LIPIOCR_GEMMA_TIMEOUT_SECONDS: ${LIPIOCR_GEMMA_TIMEOUT_SECONDS:-90}
+      LIPIOCR_GEMMA_MAX_TOKENS: ${LIPIOCR_GEMMA_MAX_TOKENS:-4000}
       LIPIOCR_GEMMA_RETRIES: ${LIPIOCR_GEMMA_RETRIES:-2}
       LIPIOCR_GEMMA_REQUIRE_JSON: ${LIPIOCR_GEMMA_REQUIRE_JSON:-true}
-      LIPIOCR_API_AUTH_ENABLED: ${LIPIOCR_API_AUTH_ENABLED:-false}
-      LIPIOCR_API_KEYS: ${LIPIOCR_API_KEYS:-}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lipiocr}:${POSTGRES_PASSWORD:-change-me-before-production}@postgres:5432/${POSTGRES_DB:-lipiocr}
+      LIPIOCR_API_AUTH_ENABLED: ${LIPIOCR_API_AUTH_ENABLED:-true}
+      LIPIOCR_API_KEYS: ${LIPIOCR_API_KEYS:?Set LIPIOCR_API_KEYS before starting LipiOCR}
+      LIPIOCR_PREVIEW_TOKEN_SECRET: ${LIPIOCR_PREVIEW_TOKEN_SECRET:?Set LIPIOCR_PREVIEW_TOKEN_SECRET before starting LipiOCR}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lipiocr}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting LipiOCR}@postgres:5432/${POSTGRES_DB:-lipiocr}
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT_URL: http://minio:9000
       S3_BUCKET: ${S3_BUCKET:-lipiocr-documents}
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lipiocr}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-before-production}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD before starting LipiOCR}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8020:8000"
+      - "${LIPIOCR_API_PORT:-8020}:8000"
     volumes:
       - ../storage/uploads:/app/storage/uploads
     depends_on:
@@ -42,9 +45,11 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8020}
+        NEXT_PUBLIC_API_PORT: ${LIPIOCR_API_PORT:-8020}
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
     container_name: lipiocr-frontend
     ports:
-      - "3020:3000"
+      - "${LIPIOCR_FRONTEND_PORT:-3020}:3000"
     depends_on:
       - api
     restart: unless-stopped
@@ -55,7 +60,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-lipiocr}
       POSTGRES_USER: ${POSTGRES_USER:-lipiocr}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-before-production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting LipiOCR}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -74,10 +79,10 @@ services:
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lipiocr}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-before-production}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD before starting LipiOCR}
     ports:
-      - "9100:9000"
-      - "9101:9001"
+      - "${LIPIOCR_MINIO_BIND:-127.0.0.1}:9100:9000"
+      - "${LIPIOCR_MINIO_BIND:-127.0.0.1}:9101:9001"
     volumes:
       - minio-data:/data
     restart: unless-stopped
@@ -89,7 +94,9 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c "
-      mc alias set lipiocr http://minio:9000 ${MINIO_ROOT_USER:-lipiocr} ${MINIO_ROOT_PASSWORD:-change-me-before-production};
+      until mc alias set lipiocr http://minio:9000 ${MINIO_ROOT_USER:-lipiocr} ${MINIO_ROOT_PASSWORD:-change-me-before-production}; do
+        sleep 2;
+      done;
       mc mb -p lipiocr/${S3_BUCKET:-lipiocr-documents} || true;
       exit 0;
       "
