@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import Body, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.app_context import (
     UPLOAD_DIR,
@@ -12,6 +13,9 @@ from app.app_context import (
     repository,
     settings,
 )
+from app.jobs.models import JobStatus, JobType
+from app.jobs.queue import job_queue
+from app.jobs.worker import retry_failed_job, run_next_job
 from app.models import (
     AuditEvent,
     CaseCreateRequest,
@@ -388,6 +392,21 @@ async def upload_case_document(
             },
         )
     )
+    if settings.async_jobs_enabled:
+        job = job_queue.enqueue(
+            job_type=JobType.case_document_upload,
+            target_type="case",
+            target_id=case.id,
+            payload={
+                "case_id": case.id,
+                "filename": file.filename or stored_path.name,
+                "declared_document_type": declared_document_type.value,
+                "stored_path": stored_path.name,
+                "storage": storage_metadata,
+            },
+        )
+        repository.save_case(case)
+        return JSONResponse(status_code=202, content=_job_envelope(job))
 
     document, fields, findings = await process_enterprise_document(
         case_type=case.case_type,
@@ -493,6 +512,41 @@ def templates():
     return list_templates()
 
 
+def _job_envelope(job):
+    return {
+        "job_id": job.id,
+        "status": job.status.value,
+        "status_url": f"/api/jobs/{job.id}",
+    }
+
+
+@app.get("/api/jobs")
+def list_jobs(http_request: Request, status: Optional[JobStatus] = None):
+    require_permission(settings, http_request, "view_case")
+    return [job.model_dump(mode="json") for job in job_queue.list_jobs(status=status)]
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str, http_request: Request):
+    require_permission(settings, http_request, "view_case")
+    return job_queue.get(job_id)
+
+
+@app.post("/api/jobs/{job_id}/retry")
+def retry_job(job_id: str, http_request: Request):
+    require_permission(settings, http_request, "upload_document")
+    return retry_failed_job(job_queue, job_id)
+
+
+@app.post("/api/jobs/run-next")
+def run_next_queued_job(http_request: Request):
+    require_permission(settings, http_request, "admin")
+    job = run_next_job(job_queue, handlers={})
+    if job is None:
+        return {"status": "idle"}
+    return job
+
+
 @app.post("/api/documents/upload", status_code=201)
 async def upload_document(
     http_request: Request,
@@ -503,6 +557,26 @@ async def upload_document(
     stored_path = UPLOAD_DIR / f"{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}-{file.filename}"
     contents = await file.read()
     stored_path.write_bytes(contents)
+
+    if settings.async_jobs_enabled:
+        storage_metadata = object_storage.put_upload(
+            case_id="standalone",
+            filename=file.filename or stored_path.name,
+            content=contents,
+            content_type=file.content_type or "application/octet-stream",
+        )
+        job = job_queue.enqueue(
+            job_type=JobType.document_upload,
+            target_type="document",
+            target_id=stored_path.stem,
+            payload={
+                "filename": file.filename or stored_path.name,
+                "declared_document_type": document_type.value,
+                "stored_path": stored_path.name,
+                "storage": storage_metadata,
+            },
+        )
+        return JSONResponse(status_code=202, content=_job_envelope(job))
 
     template = get_template(document_type)
     provider = ocr_provider("mock")

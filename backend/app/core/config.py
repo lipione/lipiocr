@@ -12,6 +12,12 @@ class Settings(BaseModel):
     upload_dir: Path = Path(os.getenv("LIPIOCR_UPLOAD_DIR", "storage/uploads"))
     repository_backend: str = os.getenv("LIPIOCR_REPOSITORY_BACKEND", "auto")
     database_url: str = os.getenv("DATABASE_URL", "")
+    async_jobs_enabled: bool = os.getenv("LIPIOCR_ASYNC_JOBS_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     storage_backend: str = os.getenv("LIPIOCR_STORAGE_BACKEND", "auto")
     s3_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "")
     s3_bucket: str = os.getenv("S3_BUCKET", "lipiocr-documents")

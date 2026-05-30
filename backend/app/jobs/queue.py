@@ -45,6 +45,10 @@ class InMemoryJobQueue:
             return jobs
         return [job for job in jobs if job.status == status]
 
+    def clear(self) -> None:
+        self._jobs.clear()
+        self._queue.clear()
+
     def claim_next(self) -> Optional[ProcessingJob]:
         while self._queue:
             job_id = self._queue.popleft()
