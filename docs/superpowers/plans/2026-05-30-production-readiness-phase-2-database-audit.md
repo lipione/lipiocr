@@ -1392,3 +1392,9 @@ If no files changed after verification, do not create an empty commit.
 - SQL case and standalone document repositories can round-trip current Pydantic API models.
 - Audit events are append-only and hash chained per tenant/entity.
 - Existing in-memory demo behavior remains available.
+
+## Verification Log
+
+- 2026-05-30: `cd backend && .venv/bin/python -m pytest tests/test_database_models.py tests/test_db_session.py tests/test_alembic_migration.py tests/test_audit_repository.py tests/test_database_repository.py -q` passed with `12 passed`.
+- 2026-05-30: in-memory schema check printed `[]` for legacy `kyc_cases` and `legacy_documents` tables.
+- 2026-05-30: `make test` passed with backend `87 passed`, frontend Node tests `10 passed`, ESLint clean, and Next production build successful.
