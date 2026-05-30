@@ -41,6 +41,7 @@ import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, useCallback, u
 import { createOperatorSession, loadOperatorSession, logoutOperatorSession, type OperatorPrincipal, type OperatorSessionRequest } from "../lib/auth-client";
 import { API_BASE, apiJson, isUnauthorized, listJobs, retryJob } from "../lib/api-client";
 import { computeTemplateDragBbox, type TemplateDragMode } from "../lib/template-canvas";
+import { AccuracyReport } from "./analytics/accuracy-report";
 import { LoginPanel } from "./auth/login-panel";
 import { LipiOcrLogo } from "./brand/lipiocr-logo";
 import { TemplateStudioPanel } from "./templates/template-studio";
@@ -3546,6 +3547,13 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           {["command", "analytics"].includes(section) ? (
           <Panel title="Production Pipeline" icon={<SearchCheck size={16} />}>
             <div className={productionGridClass}>
+              {section === "analytics" ? (
+                <div className="space-y-3">
+                  <SectionLabel icon={<Gauge size={15} />} label="OCR Accuracy Program" />
+                  <ResourceError resource={accuracy} />
+                  <AccuracyReport accuracy={accuracy.data} />
+                </div>
+              ) : null}
               {section !== "analytics" ? (
               <div className="space-y-2">
                 <SectionLabel icon={<FileSearch size={15} />} label="Recognition: LipiCore" />

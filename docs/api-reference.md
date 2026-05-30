@@ -146,6 +146,8 @@ Webhook deliveries include:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/analytics/accuracy` | Accuracy, correction, confidence, and benchmark analytics. |
+| `GET` | `/api/analytics/benchmark` | Export the active OCR benchmark report with document, language, handwriting, field, and confidence breakdowns. |
+| `POST` | `/api/analytics/benchmark/samples` | Upsert an approved benchmark sample into the active benchmark manifest. |
 | `POST` | `/api/analytics/corrections` | Record reviewer correction event. |
 | `GET` | `/api/compliance/reports` | Access review, audit integrity, retention, backup, and export reports. |
 

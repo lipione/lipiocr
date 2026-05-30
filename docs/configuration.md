@@ -51,6 +51,7 @@ Configuration is environment-variable driven. Do not commit real `.env` files.
 | `LIPIOCR_LOAD_TEMPLATE_STORE` | empty | Set `true` to load template stores on startup. |
 | `LIPIOCR_WEBHOOK_SECRET` | demo fallback | Must be tenant/integration-specific in production. |
 | `LIPIOCR_PUBLIC_APP_BASE_URL` | `http://localhost:3000` | Public base URL used for review links. |
+| `LIPIOCR_BENCHMARK_MANIFEST` | empty | Optional JSON manifest path for approved OCR benchmark samples. Defaults to the local benchmark store or test fixture. |
 
 ## Frontend Variables
 

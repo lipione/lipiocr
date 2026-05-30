@@ -154,3 +154,14 @@ def test_accuracy_analytics_records_reviewer_corrections():
     assert body["correction_count"] >= 1
     assert body["field_accuracy"]["citizenship_number"]["corrections"] >= 1
     assert "citizenship" in body["document_type_performance"]
+
+
+def test_accuracy_benchmark_api_exposes_field_language_and_handwriting_breakdowns():
+    benchmark = client.get("/api/analytics/benchmark")
+
+    assert benchmark.status_code == 200
+    body = benchmark.json()
+    assert "by_field" in body
+    assert "by_language" in body
+    assert "handwriting" in body
+    assert "confidence_buckets" in body

@@ -439,6 +439,7 @@ export type TemplateStudio = {
     status: string;
     page_count: number;
     field_count: number;
+    quality_score?: number;
     updated_at: string;
   }[];
   extraction_modes: string[];
@@ -469,6 +470,8 @@ export type TemplateProfileField = {
   validation_rule?: string | null;
   extraction_hint: string;
   confidence: number;
+  detection_source?: string;
+  detection_reason?: string;
 };
 
 export type TemplateDraft = {
@@ -476,6 +479,10 @@ export type TemplateDraft = {
   name: string;
   document_type: DocumentType;
   status: string;
+  document_type_confidence?: number;
+  document_type_reason?: string;
+  quality_score?: number;
+  quality_checks?: { key: string; status: string; detail: string }[];
   pages: TemplateProfilePage[];
   fields: TemplateProfileField[];
   created_at: string;
@@ -635,6 +642,8 @@ export type AccuracyAnalytics = {
   >;
   document_type_performance: Record<string, { corrections: number; status: string }>;
   benchmark?: {
+    name?: string;
+    version?: string;
     sample_count: number;
     overall: {
       character_error_rate: number;
@@ -645,6 +654,39 @@ export type AccuracyAnalytics = {
       reviewer_correction_rate: number;
     };
     by_mode: Record<string, { field_f1: number; reviewer_correction_rate: number }>;
+    by_language?: Record<string, { field_count: number; field_f1: number; reviewer_correction_rate: number }>;
+    by_document_type?: Record<string, { field_f1: number; reviewer_correction_rate: number }>;
+    by_field?: Record<
+      string,
+      {
+        expected: number;
+        extracted: number;
+        matched: number;
+        precision: number;
+        recall: number;
+        f1: number;
+        average_character_error_rate: number;
+        average_confidence: number;
+        document_types: string[];
+        modes: string[];
+        languages: string[];
+      }
+    >;
+    confidence_buckets?: Record<string, { field_count: number; matched: number; precision: number }>;
+    handwriting?: {
+      sample_count: number;
+      field_count: number;
+      nepali_field_count: number;
+      weak_fields: { field_key: string; f1: number; recall: number; average_character_error_rate: number; expected: number }[];
+    };
+    weak_fields?: { field_key: string; f1: number; recall: number; average_character_error_rate: number; expected: number }[];
+    dataset_readiness?: {
+      document_type_count: number;
+      handwriting_sample_count: number;
+      nepali_field_count: number;
+      status: string;
+      gaps: string[];
+    };
   };
   confidence_drift: {
     field_key: string;

@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Dict, Iterable
 
-from app.accuracy.dataset import default_manifest_path, load_benchmark_manifest
+from app.accuracy.dataset import load_active_benchmark_dataset
 from app.accuracy.report import build_benchmark_report, dataset_from_cases
 from app.models import AuditEvent, KycCase
 
@@ -78,8 +78,9 @@ def build_accuracy_analytics(cases: Iterable[KycCase]) -> Dict[str, object]:
         }
         for document_type, count in document_counts.items()
     }
-    manifest_path = default_manifest_path()
-    benchmark_dataset = load_benchmark_manifest(manifest_path) if manifest_path else dataset_from_cases(cases_list)
+    benchmark_dataset = load_active_benchmark_dataset()
+    if not benchmark_dataset.samples:
+        benchmark_dataset = dataset_from_cases(cases_list)
 
     return {
         "correction_count": len(corrections),

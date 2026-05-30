@@ -6,6 +6,7 @@
       "sample_id": "citizenship-printed-001",
       "document_type": "citizenship",
       "mode": "printed",
+      "language": "mixed",
       "expected_text": "Government of Nepal Name Sita Sharma Citizenship No 27-01-78-12345",
       "actual_text": "Government of Nepal Name Sita Sharma Citizenship No 27-01-78-12345",
       "expected_fields": {
@@ -16,12 +17,25 @@
         "full_name": "Sita Sharma",
         "citizenship_number": "27-01-78-12345"
       },
+      "field_modes": {
+        "full_name": "printed",
+        "citizenship_number": "printed"
+      },
+      "field_languages": {
+        "full_name": "en",
+        "citizenship_number": "mixed"
+      },
+      "field_confidences": {
+        "full_name": 0.98,
+        "citizenship_number": 0.97
+      },
       "reviewer_corrections": 0
     },
     {
       "sample_id": "asba-handwriting-001",
       "document_type": "asba_application",
       "mode": "handwriting",
+      "language": "mixed",
       "expected_text": "Applicant Name Rudra Man Isuwa Amount 35000",
       "actual_text": "Applicant Name Rudra M Isuwa Amount 3500O",
       "expected_fields": {
@@ -31,6 +45,18 @@
       "actual_fields": {
         "full_name_en": "Rudra M Isuwa",
         "amount": "3500O"
+      },
+      "field_modes": {
+        "full_name_en": "handwriting",
+        "amount": "handwriting"
+      },
+      "field_languages": {
+        "full_name_en": "en",
+        "amount": "mixed"
+      },
+      "field_confidences": {
+        "full_name_en": 0.82,
+        "amount": 0.74
       },
       "reviewer_corrections": 2
     }

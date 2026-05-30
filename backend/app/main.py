@@ -683,6 +683,25 @@ def accuracy_analytics(http_request: Request):
     return build_accuracy_analytics(repository.list_cases())
 
 
+@app.get("/api/analytics/benchmark")
+def accuracy_benchmark(http_request: Request):
+    from app.accuracy.dataset import load_active_benchmark_dataset
+    from app.accuracy.report import build_benchmark_report
+
+    require_permission(settings, http_request, "view_audit")
+    return build_benchmark_report(load_active_benchmark_dataset(settings))
+
+
+@app.post("/api/analytics/benchmark/samples", status_code=201)
+def upsert_accuracy_benchmark_sample(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.accuracy.dataset import BenchmarkSample, append_benchmark_sample
+    from app.accuracy.report import build_benchmark_report
+
+    require_permission(settings, http_request, "view_audit")
+    dataset = append_benchmark_sample(BenchmarkSample.model_validate(payload), settings)
+    return {"sample_count": len(dataset.samples), "benchmark": build_benchmark_report(dataset)}
+
+
 @app.post("/api/analytics/corrections", status_code=201)
 def record_accuracy_correction(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
     from app.services.accuracy_analytics import record_correction

@@ -29,6 +29,46 @@ def test_template_draft_upload_auto_maps_multiple_pages():
     assert fields["address_en"]["page_number"] == 2
 
 
+def test_template_draft_uses_label_intelligence_for_blank_nepali_financial_form():
+    response = client.post(
+        "/api/admin/templates/drafts",
+        data={"name": "NIC ASIA ASBA Blank", "document_type": "unknown"},
+        files=[
+            (
+                "files",
+                (
+                    "blank-asba.txt",
+                    "\n".join(
+                        [
+                            "NIC ASIA",
+                            "हितग्राही खरिद दरखास्त फारम",
+                            "DP ID",
+                            "Client ID",
+                            "Applicant's Full Name",
+                            "Permanent Address (in English)",
+                            "Mobile No",
+                            "Email",
+                            "Applicant Signature",
+                        ]
+                    ).encode("utf-8"),
+                    "text/plain",
+                ),
+            ),
+        ],
+    )
+
+    assert response.status_code == 201
+    draft = response.json()["draft"]
+    fields = {field["key"]: field for field in draft["fields"]}
+
+    assert draft["document_type"] == "asba_application"
+    assert draft["document_type_confidence"] >= 0.7
+    assert draft["quality_score"] >= 0.65
+    assert {"dp_id", "client_id", "full_name_en", "address_en", "mobile", "email", "signature"}.issubset(fields)
+    assert fields["dp_id"]["detection_source"] == "label_intelligence"
+    assert "DP ID" in fields["dp_id"]["detection_reason"]
+
+
 def test_template_draft_can_be_adjusted_and_published_as_profile():
     upload = client.post(
         "/api/admin/templates/drafts",

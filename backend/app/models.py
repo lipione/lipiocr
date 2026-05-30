@@ -240,6 +240,8 @@ class TemplateProfileField(BaseModel):
     validation_rule: Optional[str] = None
     extraction_hint: str = ""
     confidence: float = 0.0
+    detection_source: str = "manual"
+    detection_reason: str = ""
 
 
 class TemplateDraft(BaseModel):
@@ -247,6 +249,10 @@ class TemplateDraft(BaseModel):
     name: str
     document_type: DocumentType = DocumentType.unknown
     status: str = "draft"
+    document_type_confidence: float = 0.0
+    document_type_reason: str = ""
+    quality_score: float = 0.0
+    quality_checks: List[Dict[str, object]] = Field(default_factory=list)
     pages: List[TemplateProfilePage] = Field(default_factory=list)
     fields: List[TemplateProfileField] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -264,6 +270,8 @@ class TemplateProfile(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
     rollback_of: Optional[int] = None
+    quality_score: float = 0.0
+    quality_checks: List[Dict[str, object]] = Field(default_factory=list)
     pages: List[TemplateProfilePage] = Field(default_factory=list)
     fields: List[TemplateProfileField] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)

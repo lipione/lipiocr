@@ -144,6 +144,19 @@ export function TemplateStudioPanel({
             </TemplateActionButton>
           </form>
 
+          {templateDraft ? (
+            <div className="rounded-2xl border border-cyan-100 bg-white p-3 text-xs">
+              <TemplateSectionLabel icon={<FileSearch size={15} />} label="Auto Mapping" />
+              <div className="grid gap-2">
+                <TemplateSignal label="Detected family" score={templateDraft.document_type_confidence} value={labelize(templateDraft.document_type)} />
+                <TemplateSignal label="Template quality" score={templateDraft.quality_score} value={qualityLabel(templateDraft.quality_score)} />
+              </div>
+              {templateDraft.document_type_reason ? (
+                <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-slate-600">{templateDraft.document_type_reason}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-slate-200 p-3">
             <TemplateSectionLabel icon={<Layers3 size={15} />} label="Pages" />
             <div className="grid gap-2">
@@ -197,6 +210,7 @@ export function TemplateStudioPanel({
                   </div>
                   <p className="mt-1 truncate text-slate-500">
                     {profile.page_count} pages · {profile.field_count} fields · v{profile.version}
+                    {profile.quality_score !== undefined ? ` · ${pct(profile.quality_score)} quality` : ""}
                   </p>
                 </div>
               ))}
@@ -209,7 +223,7 @@ export function TemplateStudioPanel({
             <TemplateInfo label="Draft" value={templateDraft ? labelize(templateDraft.status) : "None"} />
             <TemplateInfo label="Pages" value={`${templateDraft?.pages.length ?? 0}`} />
             <TemplateInfo label="Fields" value={`${templateDraft?.fields.length ?? 0}`} />
-            <TemplateInfo label="Selected" value={selectedTemplateField ? selectedTemplateField.key : "None"} />
+            <TemplateInfo label="Quality" value={templateDraft ? pct(templateDraft.quality_score) : "0%"} />
           </div>
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
             <div className="border-b border-slate-200 bg-white p-3">
@@ -325,6 +339,11 @@ export function TemplateStudioPanel({
                       <span className="rounded-full bg-slate-100 px-2 py-1 font-mono">{pct(field.confidence)}</span>
                     </span>
                     <span className="mt-1 block truncate font-mono text-slate-500">{field.key}</span>
+                    {field.detection_source ? (
+                      <span className="mt-2 inline-flex max-w-full rounded-full bg-white px-2 py-1 font-bold text-slate-500">
+                        <span className="truncate">{labelize(field.detection_source)}</span>
+                      </span>
+                    ) : null}
                   </button>
                 ))
               ) : (
@@ -412,6 +431,12 @@ export function TemplateStudioPanel({
                     value={selectedTemplateField.extraction_hint}
                   />
                 </label>
+                {selectedTemplateField.detection_reason ? (
+                  <div className="rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
+                    <p className="font-extrabold">Auto-map reason</p>
+                    <p className="mt-1 leading-5">{selectedTemplateField.detection_reason}</p>
+                  </div>
+                ) : null}
                 <TemplateActionButton
                   className="w-full"
                   icon={<Trash2 size={14} />}
@@ -446,6 +471,23 @@ export function TemplateStudioPanel({
               Publish
             </TemplateActionButton>
           </div>
+
+          {templateDraft?.quality_checks?.length ? (
+            <div className="rounded-2xl border border-slate-200 p-3">
+              <TemplateSectionLabel icon={<ShieldCheck size={15} />} label="Publish Readiness" />
+              <div className="grid gap-2">
+                {templateDraft.quality_checks.map((check) => (
+                  <div className={`rounded-xl border px-3 py-2 text-xs ${statusTone(check.status)}`} key={check.key}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-extrabold">{labelize(check.key)}</span>
+                      <span className="font-mono">{labelize(check.status)}</span>
+                    </div>
+                    <p className="mt-1">{check.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </TemplatePanel>
@@ -500,6 +542,17 @@ function pct(value?: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function qualityLabel(value?: number) {
+  const score = value ?? 0;
+  if (score >= 0.8) {
+    return "Ready for test run";
+  }
+  if (score >= 0.65) {
+    return "Review before publish";
+  }
+  return "Needs mapping";
+}
+
 function statusTone(status?: string) {
   const value = (status ?? "unknown").toLowerCase();
   if (["approved", "configured", "passed", "clean", "ready", "verified"].includes(value)) {
@@ -543,6 +596,18 @@ function TemplateInfo({ label, value }: { label: string; value: string }) {
     <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3">
       <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
       <p className="mt-1 truncate text-sm font-bold text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function TemplateSignal({ label, score, value }: { label: string; score?: number; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <span className="min-w-0">
+        <span className="block font-bold text-slate-900">{label}</span>
+        <span className="block truncate text-slate-500">{value}</span>
+      </span>
+      <span className="font-mono font-extrabold text-cyan-700">{pct(score)}</span>
     </div>
   );
 }

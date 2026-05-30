@@ -19,6 +19,7 @@ from app.models import (
     TemplateProfileField,
     TemplateProfilePage,
 )
+from app.services.template_intelligence import infer_template_document_type, score_template_quality, suggest_label_fields
 from app.services.templates import upsert_template
 
 
@@ -119,6 +120,8 @@ def _field_from_extraction(field: ExtractedField, page_number: int) -> TemplateP
         validation_rule=field.validation_status.value if field.validation_status else None,
         extraction_hint=field.evidence.evidence_text,
         confidence=field.confidence,
+        detection_source="extraction",
+        detection_reason=f"Suggested from extracted field '{field.label}' with OCR evidence.",
     )
 
 
@@ -154,19 +157,36 @@ def create_template_draft(
     extracted_fields: List[ExtractedField],
 ) -> TemplateDraft:
     _load()
-    seen: set[tuple[str, int]] = set()
-    fields: list[TemplateProfileField] = []
+    fields_by_identity: dict[tuple[str, int], TemplateProfileField] = {}
     for field in extracted_fields:
         if field.key.startswith("ocr_line_") or field.source in {"full_page_ocr", "handwriting_ocr"}:
             continue
         page_number = field.evidence.source_page or 1
         identity = (field.key, page_number)
-        if identity in seen:
+        if identity in fields_by_identity:
             continue
-        seen.add(identity)
-        fields.append(_field_from_extraction(field, page_number))
+        fields_by_identity[identity] = _field_from_extraction(field, page_number)
 
-    draft = TemplateDraft(name=name, document_type=document_type, pages=pages, fields=fields)
+    for field in suggest_label_fields(pages):
+        identity = (field.key, field.page_number)
+        previous = fields_by_identity.get(identity)
+        if previous is not None and previous.confidence > field.confidence:
+            continue
+        fields_by_identity[identity] = field
+
+    detected_type, type_confidence, type_reason = infer_template_document_type(pages, document_type)
+    fields = sorted(fields_by_identity.values(), key=lambda item: (item.page_number, item.bbox[1], item.bbox[0], item.key))
+    quality_score, quality_checks = score_template_quality(fields, pages)
+    draft = TemplateDraft(
+        name=name,
+        document_type=detected_type,
+        document_type_confidence=type_confidence,
+        document_type_reason=type_reason,
+        quality_score=quality_score,
+        quality_checks=quality_checks,
+        pages=pages,
+        fields=fields,
+    )
     _DRAFTS[draft.id] = draft
     _persist()
     return draft
@@ -188,6 +208,7 @@ def update_template_draft(draft_id: str, update: TemplateDraftUpdate) -> Templat
         draft.document_type = update.document_type
     if update.fields is not None:
         draft.fields = update.fields
+        draft.quality_score, draft.quality_checks = score_template_quality(draft.fields, draft.pages)
     draft.updated_at = datetime.utcnow()
     _DRAFTS[draft.id] = draft
     _persist()
@@ -203,6 +224,8 @@ def publish_template_draft(draft_id: str, *, tenant_id: str = "demo-institution"
         approval_status="approved",
         approved_by=actor,
         approved_at=datetime.utcnow(),
+        quality_score=draft.quality_score,
+        quality_checks=draft.quality_checks,
         pages=draft.pages,
         fields=draft.fields,
     )
@@ -308,6 +331,7 @@ def template_profile_summaries() -> list[dict[str, object]]:
             "status": profile.status,
             "page_count": len(profile.pages),
             "field_count": len(profile.fields),
+            "quality_score": profile.quality_score,
             "updated_at": profile.updated_at.isoformat(),
         }
         for profile in list_template_profiles()

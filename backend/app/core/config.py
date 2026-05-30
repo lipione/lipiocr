@@ -70,6 +70,7 @@ class Settings(BaseModel):
         os.getenv("LIPIOCR_API_KEYS", "lipiocr-dev-preview-secret"),
     )
     preview_token_ttl_seconds: int = int(os.getenv("LIPIOCR_PREVIEW_TOKEN_TTL_SECONDS", "900"))
+    benchmark_manifest_path: str = os.getenv("LIPIOCR_BENCHMARK_MANIFEST", "")
 
     @property
     def cors_origin_list(self) -> list[str]:
