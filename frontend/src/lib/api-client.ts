@@ -1,4 +1,5 @@
 import { formatApiError } from "./api-errors.ts";
+import type { JobStatus, ProcessingJob } from "../types/workspace.ts";
 
 export const API_KEY_STORAGE_KEY = "lipiocr.operatorApiKey";
 
@@ -72,4 +73,17 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiRequestError(response.status, formatApiError(response.status, detail));
   }
   return (await response.json()) as T;
+}
+
+export function listJobs(status?: JobStatus) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiJson<ProcessingJob[]>(`/api/jobs${query}`, { cache: "no-store" });
+}
+
+export function getJob(jobId: string) {
+  return apiJson<ProcessingJob>(`/api/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+}
+
+export function retryJob(jobId: string) {
+  return apiJson<ProcessingJob>(`/api/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" });
 }

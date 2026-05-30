@@ -14,6 +14,33 @@ export const workspaceSections = [
 
 export type WorkspaceSection = (typeof workspaceSections)[number];
 
+export const jobStatuses = ["queued", "processing", "completed", "failed", "retry_scheduled"] as const;
+
+export type JobStatus = (typeof jobStatuses)[number];
+
+export type ProcessingJob = {
+  id: string;
+  job_type: string;
+  status: JobStatus;
+  target_type: string;
+  target_id: string;
+  payload: Record<string, unknown>;
+  attempts: number;
+  max_attempts: number;
+  error?: { code: string; message: string } | null;
+  result?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+};
+
+export type JobEnvelope = {
+  job_id: string;
+  status: JobStatus;
+  status_url: string;
+};
+
 export type CaseType = "individual_kyc" | "business_kyb" | "loan_onboarding" | "document_digitization";
 export type CaseStatus = "created" | "processing" | "review_required" | "approved" | "rejected" | "exported";
 export type DocumentType =

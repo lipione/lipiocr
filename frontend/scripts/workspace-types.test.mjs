@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { workspaceSections } from "../src/types/workspace.ts";
+import { jobStatuses, workspaceSections } from "../src/types/workspace.ts";
 
 test("workspaceSections exposes production route order", () => {
   assert.deepEqual(workspaceSections, [
@@ -15,4 +15,8 @@ test("workspaceSections exposes production route order", () => {
     "analytics",
     "admin",
   ]);
+});
+
+test("jobStatuses exposes async worker states", () => {
+  assert.deepEqual(jobStatuses, ["queued", "processing", "completed", "failed", "retry_scheduled"]);
 });
