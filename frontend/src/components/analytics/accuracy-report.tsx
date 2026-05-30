@@ -48,7 +48,7 @@ export function AccuracyReport({ accuracy }: { accuracy?: AccuracyAnalytics | nu
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm" key={mode}>
             <div className="flex items-center justify-between gap-3">
               <span className="font-bold capitalize text-slate-900">{mode}</span>
-              <span className="font-mono font-bold text-indigo-700">{pct(row.field_f1)}</span>
+              <span className="font-mono font-bold text-cyan-700">{pct(row.field_f1)}</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">Reviewer correction rate {row.reviewer_correction_rate}</p>
           </div>

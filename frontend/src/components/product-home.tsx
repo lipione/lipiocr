@@ -14,10 +14,11 @@ import {
   LockKeyhole,
   Network,
   RefreshCcw,
-  ShieldCheck,
   Upload,
   Workflow,
 } from "lucide-react";
+
+import { LipiOcrLogo } from "./brand/lipiocr-logo";
 
 const features = [
   {
@@ -85,24 +86,21 @@ export function ProductHome() {
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link className="inline-flex items-center gap-3 font-extrabold text-slate-950" href="/">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]">
-              <ShieldCheck size={20} />
-            </span>
-            <span>LipiOCR Enterprise</span>
+            <LipiOcrLogo label="LipiOCR Enterprise" size="sm" />
           </Link>
           <div className="hidden items-center gap-6 text-sm font-bold text-slate-600 md:flex">
-            <a className="hover:text-indigo-700" href="#features">
+            <a className="hover:text-cyan-700" href="#features">
               Features
             </a>
-            <a className="hover:text-indigo-700" href="#workflow">
+            <a className="hover:text-cyan-700" href="#workflow">
               Workflow
             </a>
-            <a className="hover:text-indigo-700" href="#trust">
+            <a className="hover:text-cyan-700" href="#trust">
               Security
             </a>
           </div>
           <Link
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-sm font-bold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5"
+            className="inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-cyan-600 to-teal-500 px-4 text-sm font-bold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5"
             href="/dashboard"
           >
             Open Platform
@@ -123,14 +121,14 @@ export function ProductHome() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950 via-slate-950/78 to-slate-950/28" />
         <div className="mx-auto flex min-h-[500px] max-w-7xl flex-col justify-center px-4 py-14 sm:min-h-[540px] sm:px-6 lg:min-h-[580px] lg:py-16">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase text-indigo-100 backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase text-cyan-100 backdrop-blur">
               <Building2 size={14} />
               Nepal financial institutions
             </div>
             <h1 className="mt-6 max-w-3xl text-4xl font-extrabold leading-[1.1] text-white sm:text-5xl lg:text-6xl">
               LipiOCR Enterprise
             </h1>
-            <p className="mt-5 max-w-2xl text-lg font-semibold leading-8 text-indigo-50 sm:text-xl">
+            <p className="mt-5 max-w-2xl text-lg font-semibold leading-8 text-cyan-50 sm:text-xl">
               Document intelligence for KYC, onboarding, and operations.
             </p>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200">
@@ -138,7 +136,7 @@ export function ProductHome() {
               reviewers approve uncertain information before it enters institutional systems.
             </p>
             <div className="mt-5 inline-flex max-w-2xl items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold leading-6 text-white backdrop-blur">
-              <BrainCircuit className="shrink-0 text-indigo-200" size={18} />
+              <BrainCircuit className="shrink-0 text-cyan-200" size={18} />
               <span>LipiCore does OCR + bilingual normalization + entity reconciliation + reviewer-safe correction</span>
             </div>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -163,7 +161,7 @@ export function ProductHome() {
       <section id="features" className="border-b border-slate-200 bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="max-w-2xl">
-            <p className="text-sm font-bold uppercase text-indigo-600">Platform Capabilities</p>
+            <p className="text-sm font-bold uppercase text-cyan-700">Platform Capabilities</p>
             <h2 className="mt-3 text-3xl font-extrabold text-slate-950 sm:text-4xl">
               Built for real financial document operations.
             </h2>
@@ -174,7 +172,7 @@ export function ProductHome() {
                 className="rounded-xl border border-slate-100 bg-white p-5 shadow-[var(--shadow-soft)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]"
                 key={feature.title}
               >
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700">
                   {feature.icon}
                 </div>
                 <h3 className="mt-5 text-lg font-extrabold text-slate-950">{feature.title}</h3>
@@ -188,7 +186,7 @@ export function ProductHome() {
       <section className="border-b border-slate-200 bg-slate-950 py-16 text-white sm:py-20">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.78fr_1.22fr] lg:items-start">
           <div>
-            <p className="text-sm font-bold uppercase text-indigo-200">LipiCore Intelligence Layer</p>
+            <p className="text-sm font-bold uppercase text-cyan-200">LipiCore Intelligence Layer</p>
             <h2 className="mt-3 text-3xl font-extrabold sm:text-4xl">
               OCR is only the first step.
             </h2>
@@ -211,7 +209,7 @@ export function ProductHome() {
       <section id="workflow" className="border-b border-slate-200 bg-slate-50 py-16 sm:py-20">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
           <div>
-            <p className="text-sm font-bold uppercase text-indigo-600">Workflow</p>
+            <p className="text-sm font-bold uppercase text-cyan-700">Workflow</p>
             <h2 className="mt-3 text-3xl font-extrabold text-slate-950 sm:text-4xl">
               From uploaded file to verified data.
             </h2>
@@ -224,7 +222,7 @@ export function ProductHome() {
             {workflow.map((step, index) => (
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[var(--shadow-soft)]" key={step.label}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700">
                     {step.icon}
                   </span>
                   <span className="font-mono text-xs font-bold text-slate-400">0{index + 1}</span>
@@ -240,7 +238,7 @@ export function ProductHome() {
       <section id="trust" className="bg-white py-16 sm:py-20">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1fr_1fr] lg:items-start">
           <div>
-            <p className="text-sm font-bold uppercase text-indigo-600">Enterprise Trust</p>
+            <p className="text-sm font-bold uppercase text-cyan-700">Enterprise Trust</p>
             <h2 className="mt-3 text-3xl font-extrabold text-slate-950 sm:text-4xl">
               Designed to integrate with existing institution systems.
             </h2>
@@ -250,14 +248,14 @@ export function ProductHome() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                className="inline-flex h-11 items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 text-sm font-bold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5"
+                className="inline-flex h-11 items-center gap-2 rounded-full bg-gradient-to-r from-cyan-600 to-teal-500 px-5 text-sm font-bold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5"
                 href="/integrations"
               >
                 View Integrations
                 <Workflow size={16} />
               </Link>
               <Link
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-indigo-200 hover:text-indigo-700"
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-cyan-200 hover:text-cyan-700"
                 href="/verification"
               >
                 View Verification
@@ -274,9 +272,9 @@ export function ProductHome() {
                 <p className="text-sm font-bold leading-6 text-slate-800">{item}</p>
               </div>
             ))}
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-5">
+            <div className="rounded-xl border border-cyan-100 bg-cyan-50 p-5">
               <div className="flex items-center gap-3">
-                <LockKeyhole className="text-indigo-600" size={20} />
+                <LockKeyhole className="text-cyan-700" size={20} />
                 <h3 className="text-base font-extrabold text-slate-950">Private deployment ready</h3>
               </div>
               <p className="mt-3 text-sm leading-6 text-slate-600">

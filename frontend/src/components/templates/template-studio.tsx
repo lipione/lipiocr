@@ -101,12 +101,12 @@ export function TemplateStudioPanel({
     <TemplatePanel title="Template Creation Studio" icon={<FileCog size={16} />}>
       <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
-          <form className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3" onSubmit={uploadTemplateDraft}>
+          <form className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-3" onSubmit={uploadTemplateDraft}>
             <TemplateSectionLabel icon={<Upload size={15} />} label="Upload Template Pages" />
             <label className="block text-xs font-bold text-slate-600">
               Template name
               <input
-                className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                 onChange={(event) => setTemplateName(event.target.value)}
                 value={templateName}
               />
@@ -121,7 +121,7 @@ export function TemplateStudioPanel({
                 onChange={(value) => setTemplateDocumentType(value as DocumentType)}
               />
             </div>
-            <label className="mt-3 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-white px-3 text-center text-sm font-bold text-indigo-700 transition hover:-translate-y-0.5 hover:border-indigo-400">
+            <label className="mt-3 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-cyan-200 bg-white px-3 text-center text-sm font-bold text-cyan-700 transition hover:-translate-y-0.5 hover:border-cyan-400">
               <Upload size={18} />
               <span className="mt-2">{templateFileLabel}</span>
               <span className="mt-1 text-xs font-medium text-slate-500">Front/back IDs, forms, PDFs, or page images</span>
@@ -155,8 +155,8 @@ export function TemplateStudioPanel({
                     <button
                       className={`rounded-xl border p-3 text-left text-xs transition ${
                         active
-                          ? "border-indigo-500 bg-indigo-50 text-indigo-950"
-                          : "border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50"
+                          ? "border-cyan-500 bg-cyan-50 text-cyan-950"
+                          : "border-slate-200 bg-white hover:border-cyan-200 hover:bg-slate-50"
                       }`}
                       key={page.id}
                       onClick={() => {
@@ -260,8 +260,8 @@ export function TemplateStudioPanel({
                         aria-label={`${field.label} field box`}
                         className={`absolute touch-none rounded-[4px] border text-left transition ${
                           active
-                            ? "border-indigo-600 bg-indigo-300/15 shadow-[0_0_0_2px_rgba(79,70,229,0.2)]"
-                            : "border-emerald-500/70 bg-emerald-300/10 hover:border-indigo-500"
+                            ? "border-cyan-600 bg-cyan-300/15 shadow-[0_0_0_2px_rgba(14,165,168,0.2)]"
+                            : "border-emerald-500/70 bg-emerald-300/10 hover:border-cyan-500"
                         } ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
                         key={field.id}
                         onClick={(event) => {
@@ -287,7 +287,7 @@ export function TemplateStudioPanel({
                           ? templateResizeHandles.map((handle) => (
                               <span
                                 aria-hidden="true"
-                                className={`absolute h-3 w-3 rounded-full border-2 border-white bg-indigo-600 shadow-[0_2px_8px_rgba(79,70,229,0.35)] ${handle.className}`}
+                                className={`absolute h-3 w-3 rounded-full border-2 border-white bg-cyan-600 shadow-[0_2px_8px_rgba(14,165,168,0.35)] ${handle.className}`}
                                 key={handle.mode}
                                 onPointerDown={(event) => startTemplateFieldDrag(event, field, handle.mode)}
                               />
@@ -313,8 +313,8 @@ export function TemplateStudioPanel({
                   <button
                     className={`block w-full rounded-xl border p-3 text-left text-xs ${
                       field.id === selectedTemplateField?.id
-                        ? "border-indigo-500 bg-indigo-50"
-                        : "border-slate-200 bg-white hover:border-indigo-200"
+                        ? "border-cyan-500 bg-cyan-50"
+                        : "border-slate-200 bg-white hover:border-cyan-200"
                     }`}
                     key={field.id}
                     onClick={() => setSelectedTemplateFieldId(field.id)}
@@ -342,7 +342,7 @@ export function TemplateStudioPanel({
                 <label className="block text-xs font-bold text-slate-600">
                   Label
                   <input
-                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                     onChange={(event) =>
                       updateTemplateField(selectedTemplateField.id, {
                         label: event.target.value,
@@ -355,7 +355,7 @@ export function TemplateStudioPanel({
                 <label className="block text-xs font-bold text-slate-600">
                   Export key
                   <input
-                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                     onChange={(event) => updateTemplateField(selectedTemplateField.id, { key: fieldKeyFromLabel(event.target.value) })}
                     value={selectedTemplateField.key}
                   />
@@ -369,8 +369,8 @@ export function TemplateStudioPanel({
                         <button
                           className={`h-8 rounded-lg border px-2 text-xs font-bold ${
                             active
-                              ? "border-indigo-600 bg-indigo-600 text-white"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200"
+                              ? "border-cyan-600 bg-cyan-600 text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-cyan-200"
                           }`}
                           key={fieldType}
                           onClick={() => updateTemplateField(selectedTemplateField.id, { type: fieldType })}
@@ -386,7 +386,7 @@ export function TemplateStudioPanel({
                   Required field
                   <input
                     checked={selectedTemplateField.required}
-                    className="h-4 w-4 accent-indigo-600"
+                    className="h-4 w-4 accent-cyan-600"
                     onChange={(event) => updateTemplateField(selectedTemplateField.id, { required: event.target.checked })}
                     type="checkbox"
                   />
@@ -396,7 +396,7 @@ export function TemplateStudioPanel({
                   <div className="grid grid-cols-4 gap-2">
                     {selectedTemplateField.bbox.map((value, index) => (
                       <input
-                        className="h-9 min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="h-9 min-w-0 rounded-lg border border-slate-200 px-2 font-mono text-xs outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                         key={`${selectedTemplateField.id}-bbox-${index}`}
                         onChange={(event) => updateTemplateFieldBbox(selectedTemplateField.id, index, event.target.value)}
                         value={value}
@@ -407,7 +407,7 @@ export function TemplateStudioPanel({
                 <label className="block text-xs font-bold text-slate-600">
                   Extraction hint
                   <textarea
-                    className="mt-1 min-h-16 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    className="mt-1 min-h-16 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                     onChange={(event) => updateTemplateField(selectedTemplateField.id, { extraction_hint: event.target.value })}
                     value={selectedTemplateField.extraction_hint}
                   />
@@ -512,7 +512,7 @@ function statusTone(status?: string) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
   if (["processing", "loading", "running"].includes(value)) {
-    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
@@ -522,7 +522,7 @@ function TemplatePanel({ title, icon, children }: { title: string; icon: ReactNo
     <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-soft)]">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <h2 className="text-sm font-bold text-slate-950">{title}</h2>
-        <span className="rounded-xl bg-indigo-50 p-2 text-indigo-600">{icon}</span>
+        <span className="rounded-xl bg-cyan-50 p-2 text-cyan-700">{icon}</span>
       </div>
       <div className="min-w-0 p-4">{children}</div>
     </section>
@@ -532,7 +532,7 @@ function TemplatePanel({ title, icon, children }: { title: string; icon: ReactNo
 function TemplateSectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
-      <span className="rounded-lg bg-indigo-50 p-1.5 text-indigo-600">{icon}</span>
+      <span className="rounded-lg bg-cyan-50 p-1.5 text-cyan-700">{icon}</span>
       <span>{label}</span>
     </div>
   );
@@ -577,8 +577,8 @@ function TemplateSegmentedPicker({
             aria-checked={active}
             className={`min-h-10 rounded-xl border px-3 py-2 text-left text-xs font-bold ${
               active
-                ? "border-indigo-500 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
-                : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                ? "border-cyan-500 bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
+                : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700"
             }`}
             key={item.value}
             onClick={() => onChange(item.value)}
@@ -607,8 +607,8 @@ function TemplateActionButton({
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const toneClass =
     tone === "primary"
-      ? "border-indigo-600 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]"
-      : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-700 hover:shadow-[var(--shadow-soft)]";
+      ? "border-cyan-600 bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]"
+      : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-slate-50 hover:text-cyan-700 hover:shadow-[var(--shadow-soft)]";
   return (
     <button
       {...props}

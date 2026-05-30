@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 
+import { LipiOcrLogo } from "../brand/lipiocr-logo";
 import type { OperatorPrincipal, OperatorSessionRequest } from "../../lib/auth-client";
 
 const roles = ["maker", "checker", "auditor", "admin"];
@@ -38,8 +39,8 @@ export function LoginPanel({
       <section className="border-b border-emerald-200 bg-emerald-50/80">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-[var(--shadow-soft)]">
-              <ShieldCheck size={18} />
+            <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-[var(--shadow-soft)]">
+              <LipiOcrLogo showWordmark={false} size="sm" />
             </span>
             <div className="min-w-0">
               <p className="text-sm font-extrabold text-slate-950">Operator session active</p>
@@ -80,19 +81,19 @@ export function LoginPanel({
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[160px_180px_130px_260px_110px] xl:items-center">
           <input
-            className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+            className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
             onChange={(event) => setUsername(event.target.value)}
             placeholder="User"
             value={username}
           />
           <input
-            className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+            className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
             onChange={(event) => setTenantId(event.target.value)}
             placeholder="Tenant"
             value={tenantId}
           />
           <input
-            className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+            className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
             onChange={(event) => setBranchCode(event.target.value)}
             placeholder="Branch"
             value={branchCode}
@@ -101,7 +102,7 @@ export function LoginPanel({
             {roles.map((item) => (
               <button
                 className={`rounded-md px-2 text-xs font-extrabold capitalize transition ${
-                  role === item ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                  role === item ? "bg-cyan-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
                 }`}
                 key={item}
                 onClick={() => setRole(item)}
@@ -112,7 +113,7 @@ export function LoginPanel({
             ))}
           </div>
           <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-sm font-bold text-white shadow-[var(--shadow-button)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-600 to-teal-500 px-4 text-sm font-bold text-white shadow-[var(--shadow-button)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={signingIn}
             type="submit"
           >

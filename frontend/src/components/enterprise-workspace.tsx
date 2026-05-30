@@ -42,6 +42,7 @@ import { createOperatorSession, loadOperatorSession, logoutOperatorSession, type
 import { API_BASE, apiJson, isUnauthorized, listJobs, retryJob } from "../lib/api-client";
 import { computeTemplateDragBbox, type TemplateDragMode } from "../lib/template-canvas";
 import { LoginPanel } from "./auth/login-panel";
+import { LipiOcrLogo } from "./brand/lipiocr-logo";
 import { TemplateStudioPanel } from "./templates/template-studio";
 
 import type {
@@ -239,7 +240,7 @@ function statusTone(status?: string) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
   if (["processing", "loading", "running"].includes(value)) {
-    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
@@ -275,7 +276,7 @@ function evidenceOverlayTone(field: ExtractedField) {
     return "border-amber-500/70 bg-amber-300/5 shadow-[0_0_0_1px_rgba(245,158,11,0.08)]";
   }
   if (source.includes("gemma")) {
-    return "border-violet-500/70 bg-violet-300/5 shadow-[0_0_0_1px_rgba(124,58,237,0.08)]";
+    return "border-teal-500/70 bg-teal-300/5 shadow-[0_0_0_1px_rgba(14,165,168,0.08)]";
   }
   return "border-emerald-500/70 bg-emerald-300/5 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]";
 }
@@ -603,7 +604,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     exportReadinessStatus === "Ready"
       ? "border-emerald-200 bg-emerald-50 text-emerald-800"
       : exportReadinessStatus === "Unsaved edits"
-        ? "border-indigo-200 bg-indigo-50 text-indigo-800"
+        ? "border-cyan-200 bg-cyan-50 text-cyan-900"
         : "border-amber-200 bg-amber-50 text-amber-800";
   const selectedFileLabel =
     selectedFiles.length === 0
@@ -2127,16 +2128,19 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <header className="sticky top-0 z-30 border-b border-border-soft/80 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-4 px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">LipiOCR Enterprise</p>
-            <h1 className="mt-1 text-3xl font-extrabold text-slate-950">{activeNav.label}</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{activeNav.description}</p>
+          <div className="flex min-w-0 items-start gap-4">
+            <LipiOcrLogo className="mt-0.5 shrink-0" size="md" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Enterprise workspace</p>
+              <h1 className="mt-1 text-3xl font-extrabold text-slate-950">{activeNav.label}</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{activeNav.description}</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <Pill icon={<Activity size={16} />} label={message} />
             <Pill icon={<BrainCircuit size={16} />} label={aiHealth.data?.enabled ? "LipiCore active" : "LipiCore standby"} />
             <button
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-indigo-200 hover:text-indigo-700 hover:shadow-[var(--shadow-lift)]"
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-cyan-200 hover:text-cyan-700 hover:shadow-[var(--shadow-lift)]"
               onClick={refreshAll}
               type="button"
             >
@@ -2183,8 +2187,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 <button
                   className={`inline-flex h-9 min-w-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition ${
                     active
-                      ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
-                      : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+                      ? "bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
+                      : "text-slate-600 hover:bg-cyan-50 hover:text-cyan-700"
                   }`}
                   key={item.value}
                   onClick={() => setDocumentLane(item.value as DocumentLane)}
@@ -2217,7 +2221,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 </div>
                 <div className="mt-3">
                   <input
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-500/20"
                     placeholder="Search applications"
                     value={applicationSearch}
                     onChange={(event) => setApplicationSearch(event.target.value)}
@@ -2228,8 +2232,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     <button
                       className={`min-w-[210px] rounded-xl border px-3 py-2 text-left transition ${
                         selectedCase?.id === item.id
-                          ? "border-indigo-400 bg-indigo-50 text-indigo-950 shadow-[0_12px_30px_-20px_rgba(79,70,229,0.7)]"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50/60"
+                          ? "border-cyan-400 bg-cyan-50 text-cyan-950 shadow-[0_12px_30px_-20px_rgba(14,165,168,0.7)]"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-cyan-200 hover:bg-cyan-50/60"
                       }`}
                       key={item.id}
                       onClick={() => {
@@ -2254,7 +2258,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 <div className="flex items-center justify-between gap-3">
                   <SectionLabel icon={<Upload size={15} />} label="Add Document" />
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700">
+                    <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-cyan-100 bg-cyan-50 px-3 text-xs font-bold text-cyan-700">
                       <SearchCheck size={14} />
                       Auto Detect
                     </span>
@@ -2263,8 +2267,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     </ActionButton>
                   </div>
                 </div>
-                <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/60 px-3 text-center hover:border-indigo-300 hover:bg-indigo-50">
-                  <Upload className="mb-2 text-indigo-600" size={20} />
+                <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-cyan-200 bg-cyan-50/60 px-3 text-center hover:border-cyan-300 hover:bg-cyan-50">
+                  <Upload className="mb-2 text-cyan-700" size={20} />
                   <span className="max-w-full truncate text-sm font-semibold">{selectedFileLabel}</span>
                   <input
                     className="sr-only"
@@ -2299,7 +2303,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 </div>
                 <div className="mt-3">
                   <input
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-500/20"
                     placeholder="Search documents"
                     value={documentSearch}
                     onChange={(event) => setDocumentSearch(event.target.value)}
@@ -2311,8 +2315,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                       <button
                         className={`min-w-[230px] rounded-xl border px-3 py-2 text-left transition ${
                           selectedStandaloneDocument?.id === document.id
-                            ? "border-indigo-400 bg-indigo-50 text-indigo-950 shadow-[0_12px_30px_-20px_rgba(79,70,229,0.7)]"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50/60"
+                            ? "border-cyan-400 bg-cyan-50 text-cyan-950 shadow-[0_12px_30px_-20px_rgba(14,165,168,0.7)]"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-cyan-200 hover:bg-cyan-50/60"
                         }`}
                         key={document.id}
                         onClick={() => {
@@ -2335,14 +2339,14 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   )}
                 </div>
                 {recentJobs.length ? (
-                  <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3">
+                  <div className="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50/40 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">Processing</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-700">Processing</p>
                         <p className="mt-1 text-xs text-slate-500">Async OCR and LipiCore jobs.</p>
                       </div>
                       <button
-                        className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-50"
+                        className="rounded-lg border border-cyan-200 bg-white px-3 py-1.5 text-xs font-bold text-cyan-700 transition hover:border-cyan-300 hover:bg-cyan-50"
                         onClick={() => void loadJobs()}
                         type="button"
                       >
@@ -2352,7 +2356,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     <div className="mt-3 grid gap-2">
                       {recentJobs.map((job) => (
                         <div
-                          className="flex items-center justify-between gap-3 rounded-xl border border-white/80 bg-white px-3 py-2 text-xs shadow-[0_8px_24px_-20px_rgba(79,70,229,0.65)]"
+                          className="flex items-center justify-between gap-3 rounded-xl border border-white/80 bg-white px-3 py-2 text-xs shadow-[0_8px_24px_-20px_rgba(14,165,168,0.65)]"
                           key={job.id}
                         >
                           <div className="min-w-0">
@@ -2399,8 +2403,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                           <button
                             className={`min-w-[190px] rounded-xl border px-3 py-2 text-left text-xs transition ${
                               active
-                                ? "border-indigo-400 bg-white text-indigo-950 shadow-[0_10px_25px_-18px_rgba(79,70,229,0.7)]"
-                                : "border-slate-200 bg-white/70 text-slate-600 hover:border-indigo-200 hover:bg-white"
+                                ? "border-cyan-400 bg-white text-cyan-950 shadow-[0_10px_25px_-18px_rgba(14,165,168,0.7)]"
+                                : "border-slate-200 bg-white/70 text-slate-600 hover:border-cyan-200 hover:bg-white"
                             }`}
                             key={item.id}
                             onClick={() => setSelectedId(item.id)}
@@ -2424,13 +2428,13 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               <form className="space-y-3" onSubmit={handleStandaloneUpload}>
                 <div className="flex items-center justify-between gap-3">
                   <SectionLabel icon={<Upload size={15} />} label="Upload to Library" />
-                  <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700">
+                  <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-cyan-100 bg-cyan-50 px-3 text-xs font-bold text-cyan-700">
                     <SearchCheck size={14} />
                     Auto Detect
                   </span>
                 </div>
-                <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/60 px-3 text-center hover:border-indigo-300 hover:bg-indigo-50">
-                  <Upload className="mb-2 text-indigo-600" size={20} />
+                <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-cyan-200 bg-cyan-50/60 px-3 text-center hover:border-cyan-300 hover:bg-cyan-50">
+                  <Upload className="mb-2 text-cyan-700" size={20} />
                   <span className="max-w-full truncate text-sm font-semibold">{standaloneFileLabel}</span>
                   <input
                     className="sr-only"
@@ -2471,8 +2475,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                           aria-checked={active}
                           className={`inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-bold transition ${
                             active
-                              ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
-                              : "text-slate-600 hover:bg-white hover:text-indigo-700"
+                              ? "bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
+                              : "text-slate-600 hover:bg-white hover:text-cyan-700"
                           }`}
                           key={item.value}
                           onClick={() => setPreviewOverlayMode(item.value)}
@@ -2494,8 +2498,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         <button
                           className={`min-w-[190px] rounded-xl border px-3 py-2 text-left text-xs transition ${
                             isActive
-                              ? "border-indigo-500 bg-indigo-50 text-indigo-950"
-                              : "border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-200 hover:bg-white"
+                              ? "border-cyan-500 bg-cyan-50 text-cyan-950"
+                              : "border-slate-200 bg-slate-50 text-slate-600 hover:border-cyan-200 hover:bg-white"
                           }`}
                           key={document.id}
                           onClick={() => setSelectedDocumentId(document.id)}
@@ -2509,10 +2513,10 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
 	                  </div>
 	                ) : null}
 	                {documentLane === "standalone" && selectedStandaloneDocument ? (
-	                  <div className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3">
+	                  <div className="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/50 p-3">
 	                    <div className="flex flex-wrap items-start justify-between gap-3">
 	                      <div className="min-w-0">
-	                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">
+	                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-700">
 	                          LipiCore Understanding
 	                        </p>
 	                        <p className="mt-1 text-sm font-extrabold text-slate-950">
@@ -2522,7 +2526,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
 	                          {selectedStandaloneDocument.summary || "Standalone document processed for review and export."}
 	                        </p>
 	                      </div>
-	                      <span className="rounded-full bg-white px-2.5 py-1 font-mono text-xs font-bold text-indigo-700">
+	                      <span className="rounded-full bg-white px-2.5 py-1 font-mono text-xs font-bold text-cyan-700">
 	                        {pct(selectedStandaloneDocument.overall_confidence)}
 	                      </span>
 	                    </div>
@@ -2602,7 +2606,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         className={`absolute rounded-[3px] border ${
                           block.block_type === "handwriting"
                             ? "border-amber-500/60 bg-amber-300/5"
-                            : "border-indigo-500/50 bg-indigo-300/5"
+                            : "border-cyan-500/50 bg-cyan-300/5"
                         }`}
                         key={`${block.text}-${index}`}
                         style={blockStyle(block, selectedPage)}
@@ -2653,7 +2657,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                           Reanalyze
                         </ActionButton>
                         <label
-                          className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-700 hover:shadow-[var(--shadow-soft)] ${
+                          className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-slate-50 hover:text-cyan-700 hover:shadow-[var(--shadow-soft)] ${
                             busy || !selectedStandaloneDocument ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                           }`}
                         >
@@ -2696,7 +2700,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                           Reanalyze
                         </ActionButton>
                         <label
-                          className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-700 hover:shadow-[var(--shadow-soft)] ${
+                          className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-slate-50 hover:text-cyan-700 hover:shadow-[var(--shadow-soft)] ${
                             busy || !selectedCase || !selectedApplicationDocument
                               ? "cursor-not-allowed opacity-60"
                               : "cursor-pointer"
@@ -2785,7 +2789,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                             className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
                             key={`${version.version}-${version.action}-${version.created_at}`}
                           >
-                            <span className="rounded-full bg-indigo-50 px-2 py-1 font-mono font-bold text-indigo-700">
+                            <span className="rounded-full bg-cyan-50 px-2 py-1 font-mono font-bold text-cyan-700">
                               v{version.version}
                             </span>
                             <span className="min-w-0">
@@ -2799,10 +2803,10 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   </div>
                 ) : null}
                 {selectedDocumentIntelligence ? (
-                  <div className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3">
+                  <div className="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/50 p-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-700">
                           LipiCore Understanding
                         </p>
                         <p className="mt-1 text-sm font-extrabold text-slate-950">
@@ -2810,7 +2814,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         </p>
                         <p className="mt-1 truncate text-xs text-slate-600">{selectedDocumentIntelligence.reason}</p>
                       </div>
-                      <span className="rounded-full bg-white px-2.5 py-1 font-mono text-xs font-bold text-indigo-700">
+                      <span className="rounded-full bg-white px-2.5 py-1 font-mono text-xs font-bold text-cyan-700">
                         {pct(selectedDocumentIntelligence.confidence)}
                       </span>
                     </div>
@@ -2870,10 +2874,10 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         <p className="font-bold uppercase tracking-[0.12em] text-slate-500">Confidence Repair</p>
                         <div className="mt-2 grid gap-2">
                           {confidenceRepairs.slice(0, 3).map((repair) => (
-                            <div className="rounded-lg bg-indigo-50 px-3 py-2" key={`${repair.target_field}-${repair.source_field_used}`}>
+                            <div className="rounded-lg bg-cyan-50 px-3 py-2" key={`${repair.target_field}-${repair.source_field_used}`}>
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="font-bold text-slate-900">{labelize(repair.target_field)}</span>
-                                <span className="font-mono font-bold text-indigo-700">
+                                <span className="font-mono font-bold text-cyan-700">
                                   {pct(repair.original_confidence)} to {pct(repair.confidence)}
                                 </span>
                               </div>
@@ -2910,7 +2914,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               </div>
 
               <div className="max-h-[calc(100vh-260px)] min-h-[520px] overflow-auto p-4">
-                <div className="mb-4 rounded-2xl border border-indigo-100 bg-white p-3 shadow-[0_4px_20px_-12px_rgba(79,70,229,0.35)]">
+                <div className="mb-4 rounded-2xl border border-cyan-100 bg-white p-3 shadow-[0_4px_20px_-12px_rgba(14,165,168,0.35)]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
                       <SectionLabel icon={<Plus size={15} />} label="Add Missing Field" />
@@ -2918,7 +2922,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         Map a field LipiCore missed, then create the template from reviewed fields.
                       </p>
                     </div>
-                    <span className="rounded-full bg-indigo-50 px-2 py-1 font-mono text-xs font-bold text-indigo-700">
+                    <span className="rounded-full bg-cyan-50 px-2 py-1 font-mono text-xs font-bold text-cyan-700">
                       {manualFieldResolvedKey}
                     </span>
                   </div>
@@ -2926,7 +2930,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     <label className="block text-xs font-bold text-slate-600">
                       Field label
                       <input
-                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-950 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-950 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                         onChange={(event) => setManualFieldLabel(event.target.value)}
                         placeholder="Applicant Name, BOID, जन्म मिति"
                         value={manualFieldLabel}
@@ -2935,7 +2939,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     <label className="block text-xs font-bold text-slate-600">
                       Export key
                       <input
-                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm text-slate-950 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm text-slate-950 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                         onChange={(event) => setManualFieldKey(fieldKeyFromLabel(event.target.value))}
                         placeholder={manualFieldResolvedKey}
                         value={manualFieldKey}
@@ -2945,7 +2949,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   <label className="mt-2 block text-xs font-bold text-slate-600">
                     Value
                     <textarea
-                      className="mt-1 min-h-12 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold leading-6 text-slate-950 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      className="mt-1 min-h-12 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold leading-6 text-slate-950 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                       onChange={(event) => setManualFieldValue(event.target.value)}
                       placeholder="Value exactly as confirmed by reviewer"
                       rows={2}
@@ -2987,7 +2991,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                             return (
                               <label
                                 className={`block rounded-xl border p-3 transition ${
-                                  changed ? "border-indigo-300 bg-indigo-50/60" : "border-slate-200 bg-white"
+                                  changed ? "border-cyan-300 bg-cyan-50/60" : "border-slate-200 bg-white"
                                 }`}
                                 key={draftKey}
                               >
@@ -3003,7 +3007,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                                   </span>
                                 </span>
                                 <textarea
-                                  className="mt-3 min-h-12 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-950 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                  className="mt-3 min-h-12 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-950 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                                   onChange={(event) =>
                                     setFieldDrafts((current) => ({
                                       ...current,
@@ -3014,12 +3018,12 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                                   value={draftValue}
                                 />
                                 {hasCorrectionSuggestion ? (
-                                  <span className="mt-3 block rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs">
+                                  <span className="mt-3 block rounded-lg border border-cyan-100 bg-cyan-50 px-3 py-2 text-xs">
                                     <span className="flex flex-wrap items-center justify-between gap-2">
-                                      <span className="font-bold text-indigo-900">
+                                      <span className="font-bold text-cyan-950">
                                         LipiCore bilingual suggestion
                                       </span>
-                                      <span className="font-mono font-bold text-indigo-700">
+                                      <span className="font-mono font-bold text-cyan-700">
                                         {pct(field.correction_confidence ?? field.confidence)}
                                       </span>
                                     </span>
@@ -3034,7 +3038,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                                       <span className="mt-1 block line-clamp-2 text-slate-500">{field.audit_reason}</span>
                                     ) : null}
                                     <button
-                                      className="mt-2 inline-flex h-8 items-center rounded-full bg-white px-3 text-xs font-bold text-indigo-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
+                                      className="mt-2 inline-flex h-8 items-center rounded-full bg-white px-3 text-xs font-bold text-cyan-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
                                       onClick={(event) => {
                                         event.preventDefault();
                                         setFieldDrafts((current) => ({
@@ -3052,7 +3056,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                                   <span className="truncate text-slate-500">
                                     p{field.evidence.source_page} · {field.evidence.evidence_text || "No source text"}
                                   </span>
-                                  <span className="font-semibold text-indigo-600">{extractionSourceLabel(field)}</span>
+                                  <span className="font-semibold text-cyan-700">{extractionSourceLabel(field)}</span>
                                 </span>
                               </label>
                             );
@@ -3069,7 +3073,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 {exportJson ? (
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-950 p-3 text-xs text-slate-100">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="font-bold uppercase tracking-[0.14em] text-indigo-200">Export Preview</span>
+                      <span className="font-bold uppercase tracking-[0.14em] text-cyan-200">Export Preview</span>
                       <button
                         className="rounded-full border border-white/10 px-2 py-1 font-semibold text-slate-300 hover:bg-white/10"
                         onClick={() => setExportJson("")}
@@ -3104,20 +3108,20 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               </FieldLabel>
               <FieldLabel label="Applicant">
                 <input
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                   value={applicantName}
                   onChange={(event) => setApplicantName(event.target.value)}
                 />
               </FieldLabel>
               <FieldLabel label="Customer / Application ID">
                 <input
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3 font-mono text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                   value={customerRef}
                   onChange={(event) => setCustomerRef(event.target.value)}
                 />
               </FieldLabel>
               <button
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-3 text-sm font-bold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] disabled:opacity-60"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-600 to-teal-500 px-3 text-sm font-bold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] disabled:opacity-60"
                 disabled={busy}
                 type="submit"
               >
@@ -3133,7 +3137,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               <div className="grid gap-2">
                 {(operations.data?.lanes ?? []).map((lane) => (
                   <button
-                    className="grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[var(--shadow-soft)]"
+                    className="grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[var(--shadow-soft)]"
                     key={lane.key}
                     type="button"
                   >
@@ -3149,8 +3153,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 {cases.length ? (
                   cases.map((item) => (
                     <button
-                      className={`mb-2 block w-full rounded-xl border p-3 text-left shadow-sm hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[var(--shadow-soft)] ${
-                        selectedCase?.id === item.id ? "border-indigo-300 bg-indigo-50 text-indigo-950" : "border-slate-200 bg-white"
+                      className={`mb-2 block w-full rounded-xl border p-3 text-left shadow-sm hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[var(--shadow-soft)] ${
+                        selectedCase?.id === item.id ? "border-cyan-300 bg-cyan-50 text-cyan-950" : "border-slate-200 bg-white"
                       }`}
                       key={item.id}
                       onClick={() => {
@@ -3223,8 +3227,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                           <button
                             className={`min-w-0 rounded-xl border px-3 py-2 text-left text-xs transition ${
                               isActive
-                                ? "border-indigo-500 bg-white text-indigo-950 shadow-[0_10px_25px_-16px_rgba(79,70,229,0.55)]"
-                                : "border-slate-200 bg-white/70 text-slate-600 hover:border-indigo-200 hover:bg-white"
+                                ? "border-cyan-500 bg-white text-cyan-950 shadow-[0_10px_25px_-16px_rgba(14,165,168,0.55)]"
+                                : "border-slate-200 bg-white/70 text-slate-600 hover:border-cyan-200 hover:bg-white"
                             }`}
                             key={document.id}
                             onClick={() => setSelectedDocumentId(document.id)}
@@ -3260,8 +3264,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                                 aria-checked={active}
                                 className={`inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-bold transition ${
                                   active
-                                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
-                                    : "text-slate-600 hover:bg-white hover:text-indigo-700"
+                                    ? "bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
+                                    : "text-slate-600 hover:bg-white hover:text-cyan-700"
                                 }`}
                                 key={item.value}
                                 onClick={() => setPreviewOverlayMode(item.value)}
@@ -3317,7 +3321,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                               className={`absolute rounded-[3px] border ${
                                 block.block_type === "handwriting"
                                   ? "border-amber-500/60 bg-amber-300/5"
-                                  : "border-indigo-500/50 bg-indigo-300/5"
+                                  : "border-cyan-500/50 bg-cyan-300/5"
                               }`}
                               key={`${block.text}-${index}`}
                               style={blockStyle(block, selectedPage)}
@@ -3333,7 +3337,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                 </div>
 
                 <div className="min-w-0 space-y-3">
-                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-3">
+                  <div className="rounded-2xl border border-cyan-100 bg-cyan-50/50 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <SectionLabel icon={<FileSearch size={15} />} label="Extraction" />
                       <ActionButton
@@ -3452,7 +3456,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                             <div className="min-w-0 text-xs">
                               <p className="font-mono text-slate-600">p{field.evidence.source_page}</p>
                               <p className="truncate text-slate-500">{field.evidence.evidence_text}</p>
-                              <p className="mt-1 truncate text-indigo-600">{extractionSourceLabel(field)}</p>
+                              <p className="mt-1 truncate text-cyan-700">{extractionSourceLabel(field)}</p>
                             </div>
                           </div>
                         ))
@@ -3928,7 +3932,7 @@ function Panel({ title, icon, children }: { title: string; icon: ReactNode; chil
     <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-soft)]">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <h2 className="text-sm font-bold text-slate-950">{title}</h2>
-        <span className="rounded-xl bg-indigo-50 p-2 text-indigo-600">{icon}</span>
+        <span className="rounded-xl bg-cyan-50 p-2 text-cyan-700">{icon}</span>
       </div>
       <div className="min-w-0 p-4">{children}</div>
     </section>
@@ -3970,8 +3974,8 @@ function SegmentedPicker({
             aria-checked={active}
             className={`min-h-10 rounded-xl border px-3 py-2 text-left text-xs font-bold ${
               active
-                ? "border-indigo-500 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
-                : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                ? "border-cyan-500 bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
+                : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700"
             }`}
             key={item.value}
             onClick={() => onChange(item.value)}
@@ -3991,7 +3995,7 @@ function Kpi({ icon, label, value }: { icon: ReactNode; label: string; value: nu
     <div className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-[var(--shadow-soft)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]">
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-500">{label}</span>
-        <span className="rounded-xl bg-indigo-50 p-2 text-indigo-600 group-hover:bg-indigo-100">{icon}</span>
+        <span className="rounded-xl bg-cyan-50 p-2 text-cyan-700 group-hover:bg-cyan-100">{icon}</span>
       </div>
       <p className="mt-3 font-mono text-3xl font-bold text-slate-950">{value}</p>
     </div>
@@ -4001,7 +4005,7 @@ function Kpi({ icon, label, value }: { icon: ReactNode; label: string; value: nu
 function Pill({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <span className="inline-flex h-10 max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-[var(--shadow-soft)]">
-      <span className="shrink-0 text-indigo-600">{icon}</span>
+      <span className="shrink-0 text-cyan-700">{icon}</span>
       <span className="truncate">{label}</span>
     </span>
   );
@@ -4017,13 +4021,13 @@ function ModuleSwitcher({ activeHref, activeSection }: { activeHref: string; act
             <Link
               className={`group inline-flex min-w-fit items-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-bold ${
                 active
-                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)]"
-                  : "text-slate-600 hover:-translate-y-0.5 hover:bg-indigo-50 hover:text-indigo-700"
+                  ? "bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
+                  : "text-slate-600 hover:-translate-y-0.5 hover:bg-cyan-50 hover:text-cyan-700"
               }`}
               href={item.href}
               key={item.section}
             >
-              <span className={active ? "text-white" : "text-slate-400 group-hover:text-indigo-600"}>{item.icon}</span>
+              <span className={active ? "text-white" : "text-slate-400 group-hover:text-cyan-700"}>{item.icon}</span>
               <span>{item.label}</span>
             </Link>
           );
@@ -4054,7 +4058,7 @@ function InfoBox({ label, value }: { label: string; value: string }) {
 function SectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-950">
-      <span className="rounded-lg bg-indigo-50 p-1.5 text-indigo-600">{icon}</span>
+      <span className="rounded-lg bg-cyan-50 p-1.5 text-cyan-700">{icon}</span>
       <span>{label}</span>
     </div>
   );
@@ -4106,8 +4110,8 @@ function ActionButton({
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const toneClass =
     tone === "primary"
-      ? "border-indigo-600 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]"
-      : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-slate-50 hover:text-indigo-700 hover:shadow-[var(--shadow-soft)]";
+      ? "border-cyan-600 bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]"
+      : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-slate-50 hover:text-cyan-700 hover:shadow-[var(--shadow-soft)]";
   return (
     <button
       {...props}
