@@ -133,3 +133,32 @@ def test_checker_permission_required_for_approval_when_auth_enabled():
     finally:
         settings.api_auth_enabled = original_enabled
         settings.api_keys = original_keys
+
+
+def test_sql_repository_backend_uses_normalized_tables(tmp_path, monkeypatch):
+    from sqlalchemy import inspect
+
+    from app.core.config import Settings, get_settings
+    from app.models import CaseType, KycCase
+    from app.services.repository import build_repository
+
+    db_path = tmp_path / "production.db"
+    get_settings.cache_clear()
+    try:
+        repository = build_repository(Settings(repository_backend="sql", database_url=f"sqlite:///{db_path}"))
+        repository.add_case(
+            KycCase(
+                case_type=CaseType.individual_kyc,
+                applicant_name="Durable",
+                institution_id="tenant_1",
+            )
+        )
+
+        engine = repository.engine
+        names = set(inspect(engine).get_table_names())
+        assert {"cases", "documents", "audit_events", "extracted_fields"}.issubset(names)
+        assert "kyc_cases" not in names
+        assert "legacy_documents" not in names
+        assert repository.list_cases()[0].applicant_name == "Durable"
+    finally:
+        get_settings.cache_clear()
