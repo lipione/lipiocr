@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { API_BASE, API_KEY_STORAGE_KEY, apiJson, isUnauthorized, storedApiKey } from "../lib/api-client";
+import { API_BASE, API_KEY_STORAGE_KEY, apiJson, isUnauthorized, listJobs, retryJob, storedApiKey } from "../lib/api-client";
 import { computeTemplateDragBbox, type TemplateDragMode } from "../lib/template-canvas";
 import { TemplateStudioPanel } from "./templates/template-studio";
 
@@ -60,6 +60,7 @@ import type {
   FieldGroup,
   IntegrationOperations,
   IntegrationProfilesResponse,
+  JobEnvelope,
   KycCase,
   OcrBlock,
   OcrPage,
@@ -67,6 +68,7 @@ import type {
   OperationsDashboard,
   PlatformStatus,
   PreviewOverlayMode,
+  ProcessingJob,
   ResourceState,
   ReviewWorkbench,
   SplitPreviewResponse,
@@ -392,6 +394,10 @@ function isKycCase(value: unknown): value is KycCase {
   );
 }
 
+function isJobEnvelope(value: unknown): value is JobEnvelope {
+  return Boolean(value && typeof value === "object" && "job_id" in value && "status_url" in value);
+}
+
 export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) {
   const pathname = usePathname();
   const templateCanvasRef = useRef<HTMLDivElement | null>(null);
@@ -468,6 +474,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const [reviewWorkbench, setReviewWorkbench] = useState<ResourceState<ReviewWorkbench>>(() =>
     emptyResource<ReviewWorkbench>(),
   );
+  const [jobQueue, setJobQueue] = useState<ResourceState<ProcessingJob[]>>(() => emptyResource<ProcessingJob[]>());
   const [integrationOps, setIntegrationOps] = useState<ResourceState<IntegrationOperations>>(() =>
     emptyResource<IntegrationOperations>(),
   );
@@ -640,6 +647,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     approved: cases.filter((item) => item.status === "approved").length,
     exceptions: cases.filter((item) => item.risk_level === "high").length,
   };
+  const recentJobs = jobQueue.data?.slice(0, 4) ?? [];
   const selectedTemplatePage =
     templateDraft?.pages.find((page) => page.page_number === selectedTemplatePageNumber) ?? templateDraft?.pages[0] ?? null;
   const selectedTemplateField =
@@ -838,6 +846,16 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     }
   }, [handleApiFailure]);
 
+  const loadJobs = useCallback(async () => {
+    setJobQueue((current) => loadingResource(current));
+    try {
+      const data = await listJobs();
+      setJobQueue(readyResource(data));
+    } catch (error) {
+      setJobQueue((current) => failedResource(current, error, "Job queue unavailable"));
+    }
+  }, []);
+
   const loadPublicContext = useCallback(async () => {
     setAiHealth((current) => loadingResource(current));
     try {
@@ -856,8 +874,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
       return;
     }
     setAccessRequired(false);
-    await Promise.all([loadCases(), loadStandaloneDocuments(), loadEnterpriseContext()]);
-  }, [loadCases, loadPublicContext, loadStandaloneDocuments, loadEnterpriseContext]);
+    await Promise.all([loadCases(), loadStandaloneDocuments(), loadJobs(), loadEnterpriseContext()]);
+  }, [loadCases, loadJobs, loadPublicContext, loadStandaloneDocuments, loadEnterpriseContext]);
 
   const saveOperatorAccess = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -990,10 +1008,16 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
       const form = new FormData();
       form.append("declared_document_type", "unknown");
       form.append("file", uploadFile);
-      const updated = await apiJson<KycCase>(`/api/cases/${targetCase.id}/documents`, {
+      const result = await apiJson<KycCase | JobEnvelope>(`/api/cases/${targetCase.id}/documents`, {
         method: "POST",
         body: form,
       });
+      if (isJobEnvelope(result)) {
+        setMessage(`Document queued · ${compactId(result.job_id)}`);
+        void loadJobs();
+        return targetCase;
+      }
+      const updated = result;
       const previousDocumentIds = new Set(targetCase.documents.map((document) => document.id));
       const uploadedDocument =
         updated.documents.find((document) => !previousDocumentIds.has(document.id)) ??
@@ -1041,10 +1065,16 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
       const form = new FormData();
       form.append("declared_document_type", "unknown");
       form.append("file", uploadFile);
-      const document = await apiJson<DocumentRecord>("/api/documents/upload", {
+      const result = await apiJson<DocumentRecord | JobEnvelope>("/api/documents/upload", {
         method: "POST",
         body: form,
       });
+      if (isJobEnvelope(result)) {
+        setMessage(`Standalone document queued · ${compactId(result.job_id)}`);
+        void loadJobs();
+        return result;
+      }
+      const document = result;
       setStandaloneDocuments((current) => [document, ...current.filter((item) => item.id !== document.id)]);
       setSelectedStandaloneDocumentId(document.id);
       setDocumentLane("standalone");
@@ -1076,6 +1106,20 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
       }
     }
     setStandaloneFiles([]);
+  }
+
+  async function retryProcessingJob(job: ProcessingJob) {
+    setActiveAction(`retry-job-${job.id}`);
+    setMessage("Requeueing document job");
+    try {
+      await retryJob(job.id);
+      await loadJobs();
+      setMessage("Document job requeued");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not retry job");
+    } finally {
+      setActiveAction(null);
+    }
   }
 
   async function uploadTemplateDraft(event: FormEvent<HTMLFormElement>) {
@@ -2311,6 +2355,53 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     </div>
                   )}
                 </div>
+                {recentJobs.length ? (
+                  <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-indigo-700">Processing</p>
+                        <p className="mt-1 text-xs text-slate-500">Async OCR and LipiCore jobs.</p>
+                      </div>
+                      <button
+                        className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-50"
+                        onClick={() => void loadJobs()}
+                        type="button"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {recentJobs.map((job) => (
+                        <div
+                          className="flex items-center justify-between gap-3 rounded-xl border border-white/80 bg-white px-3 py-2 text-xs shadow-[0_8px_24px_-20px_rgba(79,70,229,0.65)]"
+                          key={job.id}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-slate-900">
+                              {labelize(job.job_type)} · {compactId(job.id)}
+                            </p>
+                            <p className="mt-0.5 truncate text-slate-500">
+                              {job.error?.message ?? (job.result ? "Ready for review" : String(job.payload.filename ?? job.target_id))}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <StatusBadge status={job.status} />
+                            {job.status === "failed" ? (
+                              <button
+                                className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 font-bold text-rose-700 transition hover:bg-rose-50"
+                                disabled={activeAction === `retry-job-${job.id}`}
+                                onClick={() => void retryProcessingJob(job)}
+                                type="button"
+                              >
+                                Retry
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {cases.length ? (
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
