@@ -46,6 +46,7 @@ Configuration is environment-variable driven. Do not commit real `.env` files.
 | `LIPIOCR_ALLOWED_UPLOAD_EXTENSIONS` | common images, PDF, text | Restrict alongside MIME types. |
 | `LIPIOCR_PREVIEW_TOKEN_SECRET` | derived fallback | Must be unique random secret in production. |
 | `LIPIOCR_PREVIEW_TOKEN_TTL_SECONDS` | `900` | Short TTL is safer. |
+| `LIPIOCR_ADDRESS_EVIDENCE_PATH` | `storage/address-evidence/address_evidence.json` | Local JSON store for tenant-approved address evidence. Use a mounted path for on-prem deployments. |
 | `LIPIOCR_TEMPLATE_STORE` | empty | Optional JSON store for runtime templates. |
 | `LIPIOCR_TEMPLATE_PROFILE_STORE` | empty | Optional JSON store for template profiles. |
 | `LIPIOCR_LOAD_TEMPLATE_STORE` | empty | Set `true` to load template stores on startup. |

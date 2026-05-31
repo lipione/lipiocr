@@ -7,6 +7,7 @@ LipiOCR is not positioned as "OCR only." The core product is LipiCore-assisted d
 - OCR and ICR evidence capture.
 - Bilingual Nepali/English field pairing.
 - BS/AD date normalization.
+- Address intelligence RAG for Nepal KYC: administrative registry matching, road/tole evidence, fuzzy address suggestions, and reviewer-approved learning.
 - Entity reconciliation across documents.
 - Confidence repair with audit reasons.
 - Reviewer-safe correction before export.

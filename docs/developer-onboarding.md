@@ -207,6 +207,18 @@ LIPIOCR_OCR_PROVIDER=tesseract make backend-dev
 LIPIOCR_OCR_PROVIDER=paddleocr make backend-dev
 ```
 
+## Address Evidence Dataset
+
+LipiOCR ships with a small safe development seed in `backend/app/data/address_evidence_seed.json`.
+Tenant-approved evidence is stored outside Git by default:
+
+```bash
+export LIPIOCR_ADDRESS_EVIDENCE_PATH=storage/address-evidence/address_evidence.json
+```
+
+Use the Super Admin Address Dataset panel or `/api/reference/address-evidence/import` to add institution-approved road, street, and tole records.
+Reviewer-corrected full home addresses must remain tenant-private. Convert only non-personal area, tole, road, or street names into reusable evidence.
+
 ## Persistence Modes
 
 Memory/local development:
