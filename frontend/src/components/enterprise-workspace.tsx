@@ -40,6 +40,7 @@ import {
 import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createOperatorSession, loadOperatorSession, logoutOperatorSession, type OperatorPrincipal, type OperatorSessionRequest } from "../lib/auth-client";
+import { createAddressEvidence, searchAddressEvidence, type AddressEvidenceRecord } from "../lib/address-evidence";
 import { API_BASE, apiJson, isUnauthorized, listJobs, retryJob } from "../lib/api-client";
 import { computeTemplateDragBbox, type TemplateDragMode } from "../lib/template-canvas";
 import { AccuracyReport } from "./analytics/accuracy-report";
@@ -427,6 +428,16 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const [selectedTemplatePageNumber, setSelectedTemplatePageNumber] = useState(1);
   const [selectedTemplateFieldId, setSelectedTemplateFieldId] = useState<string | null>(null);
   const [templateDrag, setTemplateDrag] = useState<TemplateDragState | null>(null);
+  const [addressQuery, setAddressQuery] = useState("Samakhusi");
+  const [addressResults, setAddressResults] = useState<AddressEvidenceRecord[]>([]);
+  const [addressDraft, setAddressDraft] = useState({
+    district_name: "Kathmandu",
+    local_level_name: "Kathmandu Metropolitan City",
+    ward: "26",
+    kind: "area_or_tole",
+    name_en: "",
+    aliases_en: "",
+  });
   const [applicationSearch, setApplicationSearch] = useState("");
   const [documentSearch, setDocumentSearch] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -1318,6 +1329,49 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     } catch (error) {
       setTemplateStudio((current) => failedResource(current, error, "Template publish failed"));
       setMessage(error instanceof Error ? error.message : "Template publish failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function handleSearchAddressEvidence(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    setBusy(true);
+    setActiveAction("address-search");
+    setMessage("Searching address dataset");
+    try {
+      const data = await searchAddressEvidence(addressQuery);
+      setAddressResults(data.results);
+      setMessage(`${data.results.length} address matches`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Address search failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function handleCreateAddressEvidence(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    setBusy(true);
+    setActiveAction("address-create");
+    setMessage("Adding address record");
+    try {
+      const data = await createAddressEvidence({
+        ...addressDraft,
+        aliases_en: addressDraft.aliases_en
+          .split("|")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        visibility: "tenant_private",
+        source: "manual_seed",
+      });
+      setAddressResults((current) => [data.record, ...current]);
+      setAddressDraft((current) => ({ ...current, name_en: "", aliases_en: "" }));
+      setMessage("Address record added");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Address create failed");
     } finally {
       setBusy(false);
       setActiveAction(null);
@@ -3432,6 +3486,121 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   <p className="mt-3 line-clamp-2 text-xs text-slate-600">{component.next_step}</p>
                 </div>
               ))}
+            </div>
+          </Panel>
+          ) : null}
+
+          {section === "admin" ? (
+          <Panel title="Address Dataset" icon={<MapPin size={16} />}>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(360px,0.72fr)]">
+              <div className="min-w-0 space-y-3">
+                <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSearchAddressEvidence}>
+                  <input
+                    className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-500/20"
+                    placeholder="Search address names or aliases"
+                    value={addressQuery}
+                    onChange={(event) => setAddressQuery(event.target.value)}
+                  />
+                  <ActionButton busy={activeAction === "address-search"} disabled={busy} icon={<SearchCheck size={14} />} type="submit">
+                    Search
+                  </ActionButton>
+                </form>
+                <div className="max-h-[360px] overflow-auto rounded-xl border border-slate-200">
+                  {addressResults.length ? (
+                    addressResults.map((record) => (
+                      <div
+                        className="grid gap-2 border-b border-slate-100 p-3 text-xs last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_96px]"
+                        key={record.id}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-slate-950">{record.name_en}</p>
+                          <p className="mt-1 truncate text-slate-500">{labelize(record.kind)}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-slate-700">
+                            {[record.district_name, record.local_level_name].filter(Boolean).join(" / ") || "Unscoped"}
+                          </p>
+                          <p className="mt-1 truncate text-slate-500">
+                            {[record.ward ? `Ward ${record.ward}` : "", ...(record.aliases_en ?? [])].filter(Boolean).join(" · ") ||
+                              "No aliases"}
+                          </p>
+                        </div>
+                        <div className="min-w-0 text-right md:text-left">
+                          <StatusBadge status={record.visibility ?? "tenant_private"} />
+                          <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{record.source ?? "manual_seed"}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="p-4 text-sm text-slate-500">No address records loaded</p>
+                  )}
+                </div>
+              </div>
+              <form className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3" onSubmit={handleCreateAddressEvidence}>
+                <SectionLabel icon={<Plus size={15} />} label="Add area, tole, or street" />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <FieldLabel label="Name">
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="Samakhusi"
+                      required
+                      value={addressDraft.name_en}
+                      onChange={(event) => setAddressDraft((current) => ({ ...current, name_en: event.target.value }))}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Aliases">
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="Samakushi | Samakhushi"
+                      value={addressDraft.aliases_en}
+                      onChange={(event) => setAddressDraft((current) => ({ ...current, aliases_en: event.target.value }))}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="District">
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      value={addressDraft.district_name}
+                      onChange={(event) => setAddressDraft((current) => ({ ...current, district_name: event.target.value }))}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Local Level">
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      value={addressDraft.local_level_name}
+                      onChange={(event) => setAddressDraft((current) => ({ ...current, local_level_name: event.target.value }))}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Ward">
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      value={addressDraft.ward}
+                      onChange={(event) => setAddressDraft((current) => ({ ...current, ward: event.target.value }))}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Kind">
+                    <SegmentedPicker
+                      ariaLabel="Address evidence kind"
+                      compact
+                      options={[
+                        { value: "area_or_tole", label: "Area" },
+                        { value: "street_or_road", label: "Street" },
+                      ]}
+                      value={addressDraft.kind}
+                      onChange={(kind) => setAddressDraft((current) => ({ ...current, kind }))}
+                    />
+                  </FieldLabel>
+                </div>
+                <ActionButton
+                  busy={activeAction === "address-create"}
+                  className="w-full"
+                  disabled={busy || !addressDraft.name_en.trim()}
+                  icon={<Plus size={14} />}
+                  type="submit"
+                  tone="primary"
+                >
+                  Add Record
+                </ActionButton>
+              </form>
             </div>
           </Panel>
           ) : null}
