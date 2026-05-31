@@ -2,8 +2,10 @@ from pathlib import Path
 
 import pytest
 
+from app.models import ExtractedField, FinancialDocument, OcrBlock, OcrPage, ValidationStatus
 from app.services.address_evidence_store import AddressEvidenceRecord, AddressEvidenceStore
 from app.services.address_intelligence import is_address_field_key, suggest_address_corrections
+from app.services.document_intelligence import analyze_document, apply_document_intelligence
 
 
 def _store(tmp_path: Path) -> AddressEvidenceStore:
@@ -101,3 +103,55 @@ def test_conflicting_location_context_does_not_merge_unrelated_area(tmp_path: Pa
     )
     if top["confidence"] >= 0.80:
         assert "area_or_tole" not in top["structured"]
+
+
+def _document_with_address() -> FinancialDocument:
+    return FinancialDocument(
+        filename="address-form.txt",
+        pages=[
+            OcrPage(
+                page_number=1,
+                width=1000,
+                height=700,
+                blocks=[
+                    OcrBlock(
+                        text="Permanent Address: Kathmadu Metropolitian ward 26 Samakushi",
+                        bbox=[80, 120, 700, 160],
+                        confidence=0.74,
+                        block_type="field_candidate",
+                    )
+                ],
+            )
+        ],
+    )
+
+
+def test_document_intelligence_exposes_address_candidates():
+    document = _document_with_address()
+
+    analysis = analyze_document(document)
+
+    assert analysis["address_candidates"]
+    candidate = analysis["address_candidates"][0]
+    assert candidate["target_field"] in {"permanent_address", "address_en", "address"}
+    assert candidate["structured"]["district"] == "Kathmandu"
+    assert "address_evidence_store" in candidate["sources"]
+
+
+def test_apply_document_intelligence_attaches_address_candidates_to_review_field():
+    document = _document_with_address()
+    field = ExtractedField(
+        key="permanent_address",
+        label="Permanent Address",
+        value="Kathmadu Metropolitian ward 26 Samakushi",
+        confidence=0.74,
+        validation_status=ValidationStatus.warning,
+        validation_message="Needs review",
+    )
+
+    analysis = apply_document_intelligence(document, [field])
+
+    assert analysis["address_candidates"]
+    assert field.correction_candidates
+    assert field.correction_candidates[0]["suggested_value"].startswith("Kathmandu Metropolitan City")
+    assert field.original_ocr_value == "Kathmadu Metropolitian ward 26 Samakushi"
