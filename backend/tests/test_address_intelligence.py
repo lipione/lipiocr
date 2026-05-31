@@ -60,3 +60,22 @@ def test_low_context_street_match_does_not_overstate_confidence(tmp_path: Path):
     assert candidates
     assert candidates[0]["confidence"] < 0.80
     assert candidates[0]["status"] == "needs_review"
+
+
+def test_conflicting_location_context_does_not_merge_unrelated_area(tmp_path: Path):
+    candidates = suggest_address_corrections(
+        "Pokhara Metropolitan City ward 26 Samakushi",
+        target_field="address",
+        tenant_id="demo-institution",
+        store=_store(tmp_path),
+    )
+
+    assert candidates
+    top = candidates[0]
+    assert not (
+        top["status"] == "suggested"
+        and top["confidence"] >= 0.80
+        and top["structured"].get("area_or_tole") == "Samakhusi"
+    )
+    if top["confidence"] >= 0.80:
+        assert "area_or_tole" not in top["structured"]

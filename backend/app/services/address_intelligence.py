@@ -98,9 +98,7 @@ def _search_evidence(
         ward=resolution.ward or "",
         limit=limit,
     )
-    if filtered:
-        return filtered
-    return store.search(value, tenant_id=tenant_id, limit=limit)
+    return filtered
 
 
 def _candidate_from_evidence(
