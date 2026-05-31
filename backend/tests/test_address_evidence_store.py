@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from app.services.address_evidence_store import (
     AddressEvidenceRecord,
     AddressEvidenceStore,
@@ -94,3 +96,137 @@ def test_csv_import_builds_records_with_aliases(tmp_path: Path):
     assert len(records) == 1
     assert records[0].name_en == "Samakhusi"
     assert records[0].aliases_en == ["Samakushi", "Samakhusi Chowk"]
+
+
+def test_tenant_cannot_overwrite_another_tenant_private_record_by_id(tmp_path: Path):
+    store = AddressEvidenceStore(
+        path=tmp_path / "address_evidence.json",
+        seed_records=[
+            AddressEvidenceRecord(
+                id="addr_private",
+                tenant_id="demo-institution",
+                visibility="tenant_private",
+                kind="area_or_tole",
+                name_en="Original Area",
+                aliases_en=["Original Alias"],
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Cannot mutate address evidence owned by another tenant"):
+        store.upsert(
+            AddressEvidenceRecord(
+                id="addr_private",
+                tenant_id="other-bank",
+                visibility="tenant_private",
+                kind="area_or_tole",
+                name_en="Overwritten Area",
+                aliases_en=["Overwritten Alias"],
+            )
+        )
+
+    assert store.search("Original Alias", tenant_id="demo-institution")[0]["name_en"] == "Original Area"
+
+
+def test_tenant_cannot_overwrite_shared_reference_seed_by_id(tmp_path: Path):
+    store = AddressEvidenceStore(
+        path=tmp_path / "address_evidence.json",
+        seed_records=[
+            AddressEvidenceRecord(
+                id="addr_shared",
+                tenant_id="system",
+                visibility="shared_reference",
+                kind="area_or_tole",
+                name_en="Shared Area",
+                aliases_en=["Shared Alias"],
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Cannot mutate shared address evidence"):
+        store.upsert(
+            AddressEvidenceRecord(
+                id="addr_shared",
+                tenant_id="demo-institution",
+                visibility="tenant_private",
+                kind="area_or_tole",
+                name_en="Tenant Area",
+                aliases_en=["Tenant Alias"],
+            )
+        )
+
+    assert store.search("Shared Alias", tenant_id="demo-institution")[0]["name_en"] == "Shared Area"
+
+
+def test_tenant_cannot_delete_shared_reference_record(tmp_path: Path):
+    store = AddressEvidenceStore(
+        path=tmp_path / "address_evidence.json",
+        seed_records=[
+            AddressEvidenceRecord(
+                id="addr_shared",
+                tenant_id="system",
+                visibility="shared_reference",
+                kind="area_or_tole",
+                name_en="Shared Area",
+                aliases_en=["Shared Alias"],
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Cannot mutate shared address evidence"):
+        store.delete("addr_shared", tenant_id="demo-institution")
+
+    assert store.search("Shared Alias", tenant_id="demo-institution")
+
+
+def test_delete_requires_tenant_context_for_existing_records(tmp_path: Path):
+    store = AddressEvidenceStore(
+        path=tmp_path / "address_evidence.json",
+        seed_records=[
+            AddressEvidenceRecord(
+                id="addr_private",
+                tenant_id="demo-institution",
+                visibility="tenant_private",
+                kind="area_or_tole",
+                name_en="Private Area",
+                aliases_en=["Private Alias"],
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="tenant_id is required"):
+        store.delete("addr_private")
+
+    assert store.search("Private Alias", tenant_id="demo-institution")
+
+
+def test_same_tenant_can_update_and_delete_tenant_private_record(tmp_path: Path):
+    store = AddressEvidenceStore(
+        path=tmp_path / "address_evidence.json",
+        seed_records=[
+            AddressEvidenceRecord(
+                id="addr_private",
+                tenant_id="demo-institution",
+                visibility="tenant_private",
+                kind="street_or_road",
+                name_en="Original Road",
+                aliases_en=["Original Rd"],
+            )
+        ],
+    )
+
+    updated = store.upsert(
+        AddressEvidenceRecord(
+            id="addr_private",
+            tenant_id="demo-institution",
+            visibility="tenant_private",
+            kind="street_or_road",
+            name_en="Updated Road",
+            aliases_en=["Updated Rd"],
+        )
+    )
+    deleted = store.delete("addr_private", tenant_id="demo-institution")
+
+    assert updated["name_en"] == "Updated Road"
+    assert deleted == {"id": "addr_private", "disabled": True, "deleted": True}
+    assert store.search("Updated Rd", tenant_id="demo-institution") == []

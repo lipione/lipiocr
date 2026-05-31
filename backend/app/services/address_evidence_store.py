@@ -118,17 +118,37 @@ class AddressEvidenceStore:
         )
         return results[:limit]
 
-    def upsert(self, record: AddressEvidenceRecord) -> dict[str, Any]:
+    def upsert(self, record: AddressEvidenceRecord, *, allow_shared_mutation: bool = False) -> dict[str, Any]:
+        existing = self._records.get(record.id)
+        if existing is not None:
+            self._ensure_can_mutate_existing_record(
+                existing,
+                tenant_id=record.tenant_id,
+                allow_shared_mutation=allow_shared_mutation,
+            )
+        if record.visibility == "shared_reference" and not allow_shared_mutation:
+            raise ValueError("Cannot mutate shared address evidence without allow_shared_mutation=True")
         self._records[record.id] = record
         self._persist()
         return record.model_dump()
 
-    def delete(self, record_id: str, *, tenant_id: str | None = None) -> dict[str, Any]:
+    def delete(
+        self,
+        record_id: str,
+        *,
+        tenant_id: str | None = None,
+        allow_shared_mutation: bool = False,
+    ) -> dict[str, Any]:
         record = self._records.get(record_id)
         if record is None:
             return {"id": record_id, "disabled": False, "deleted": False}
-        if tenant_id is not None and record.visibility == "tenant_private" and record.tenant_id != tenant_id:
-            return {"id": record_id, "disabled": False, "deleted": False}
+        if tenant_id is None:
+            raise ValueError("tenant_id is required to delete address evidence")
+        self._ensure_can_mutate_existing_record(
+            record,
+            tenant_id=tenant_id,
+            allow_shared_mutation=allow_shared_mutation,
+        )
         record.disabled = True
         self._persist()
         return {"id": record_id, "disabled": True, "deleted": True}
@@ -156,6 +176,20 @@ class AddressEvidenceStore:
         if record.visibility == "shared_reference":
             return True
         return record.visibility == "tenant_private" and record.tenant_id == tenant_id
+
+    @staticmethod
+    def _ensure_can_mutate_existing_record(
+        record: AddressEvidenceRecord,
+        *,
+        tenant_id: str,
+        allow_shared_mutation: bool,
+    ) -> None:
+        if record.visibility == "shared_reference":
+            if not allow_shared_mutation:
+                raise ValueError("Cannot mutate shared address evidence without allow_shared_mutation=True")
+            return
+        if record.visibility == "tenant_private" and record.tenant_id != tenant_id:
+            raise ValueError("Cannot mutate address evidence owned by another tenant")
 
     @staticmethod
     def _matches_filters(record: AddressEvidenceRecord, *, district: str, local_level: str, ward: str) -> bool:
