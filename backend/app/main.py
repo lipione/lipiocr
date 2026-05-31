@@ -34,11 +34,12 @@ from app.models import (
 from app.routers import compliance_router, health_router, integration_manifest_router, templates_router, tenants_router
 from app.services.calendar_intelligence import apply_calendar_intelligence
 from app.services.enterprise_extraction import process_enterprise_document
-from app.security.rbac import ROLE_PERMISSIONS
+from app.security.rbac import ROLE_PERMISSIONS, can_manage_system_templates
 from app.security.sessions import SessionPrincipal, session_store_from_settings
 from app.security.upload_policy import upload_policy_from_settings, validate_upload_policy
 from app.services.security import require_any_permission, require_permission, resolve_principal
 from app.services.templates import list_templates
+from app.services.upload_pages import ExpandedUploadPage, expand_template_upload_pages
 from app.services.validation import compute_overall_confidence, route_by_confidence, validate_field
 
 
@@ -264,6 +265,8 @@ def _retarget_document_outputs(
     findings,
 ) -> None:
     financial_document.id = document_id
+    if isinstance(getattr(financial_document, "intelligence", None), dict):
+        financial_document.intelligence["document_id"] = document_id
     for field in fields:
         field.document_id = document_id
         field.evidence.document_id = document_id
@@ -326,6 +329,11 @@ def _financial_document_from_record(document: DocumentRecord) -> FinancialDocume
         page_count=len(document.pages),
         pages=[page.model_copy(deep=True) for page in document.pages],
         summary=document.summary,
+        document_variant=document.document_variant,
+        assets=[asset.model_copy(deep=True) for asset in document.assets],
+        document_sections=[section.model_copy(deep=True) for section in document.document_sections],
+        evidence_ledger=[entry.model_copy(deep=True) for entry in document.evidence_ledger],
+        intelligence=dict(document.intelligence),
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
@@ -505,7 +513,7 @@ def upsert_template_studio(http_request: Request, payload: Dict[str, object] = B
     from app.services.production_readiness import build_template_studio
     from app.services.templates import upsert_template
 
-    require_permission(settings, http_request, "manage_templates")
+    principal = require_permission(settings, http_request, "manage_templates")
     document_type = DocumentType(str(payload.get("document_type") or "unknown"))
     fields = [
         TemplateField(
@@ -521,6 +529,7 @@ def upsert_template_studio(http_request: Request, payload: Dict[str, object] = B
         name=str(payload.get("name") or document_type.value.replace("_", " ").title()),
         fields=fields,
         validation_rules=list(payload.get("validation_rules") or []),
+        allow_system_override=can_manage_system_templates(principal),
     )
     result["studio"] = build_template_studio()
     return result
@@ -553,35 +562,48 @@ async def create_template_draft_upload(
             content_type=file.content_type or "application/octet-stream",
         )
 
-        financial_document, fields, findings = await process_enterprise_document(
-            case_type=CaseType.document_digitization,
-            filename=file.filename or stored_path.name,
-            content=contents,
-            declared_document_type=declared_type,
-            gemma_client=_gemma_client(),
-            source_path=stored_path,
-            ocr_provider=ocr_provider(),
-        )
-        del findings
-        if _is_previewable_image(stored_path.name):
-            for page in financial_document.pages:
-                page.image_uri = _upload_image_uri(stored_path.name)
+        for upload_page in expand_template_upload_pages(
+            stored_path,
+            original_filename=file.filename or stored_path.name,
+            content_type=file.content_type,
+        ):
+            if upload_page.stored_path != stored_path:
+                object_storage.put_upload(
+                    case_id="template-studio",
+                    filename=upload_page.stored_path.name,
+                    content=upload_page.content,
+                    content_type=upload_page.content_type,
+                )
 
-        for page in financial_document.pages:
-            page.page_number += page_offset
-        for field in fields:
-            field.evidence.source_page += page_offset
-
-        template_pages.extend(
-            build_template_pages(
-                financial_document.pages,
-                filename=file.filename or stored_path.name,
-                stored_name=stored_path.name,
-                start_at=page_offset + 1,
+            financial_document, fields, findings = await process_enterprise_document(
+                case_type=CaseType.document_digitization,
+                filename=upload_page.filename,
+                content=upload_page.content,
+                declared_document_type=declared_type,
+                gemma_client=_gemma_client(),
+                source_path=upload_page.stored_path,
+                ocr_provider=ocr_provider(),
             )
-        )
-        extracted_fields.extend(fields)
-        page_offset += max(1, len(financial_document.pages))
+            del findings
+            if _is_previewable_image(upload_page.stored_path.name):
+                for page in financial_document.pages:
+                    page.image_uri = _upload_image_uri(upload_page.stored_path.name)
+
+            for page in financial_document.pages:
+                page.page_number += page_offset
+            for field in fields:
+                field.evidence.source_page += page_offset
+
+            template_pages.extend(
+                build_template_pages(
+                    financial_document.pages,
+                    filename=upload_page.filename,
+                    stored_name=upload_page.stored_path.name,
+                    start_at=page_offset + 1,
+                )
+            )
+            extracted_fields.extend(fields)
+            page_offset += max(1, len(financial_document.pages))
 
     draft = create_template_draft(
         name=name,
@@ -605,8 +627,13 @@ def publish_template_draft_endpoint(draft_id: str, http_request: Request):
     from app.services.production_readiness import build_template_studio
     from app.services.template_profiles import publish_template_draft
 
-    require_permission(settings, http_request, "manage_templates")
-    profile, template_result = publish_template_draft(draft_id)
+    principal = require_permission(settings, http_request, "manage_templates")
+    profile, template_result = publish_template_draft(
+        draft_id,
+        tenant_id=principal.tenant_id,
+        actor=principal.user_id,
+        allow_system_override=can_manage_system_templates(principal),
+    )
     return {
         "profile": profile,
         "template": template_result["template"],
@@ -690,6 +717,176 @@ def accuracy_benchmark(http_request: Request):
 
     require_permission(settings, http_request, "view_audit")
     return build_benchmark_report(load_active_benchmark_dataset(settings))
+
+
+@app.get("/api/reference/nepal-locations")
+def nepal_locations_reference(http_request: Request, q: str = "", limit: int = 50):
+    from app.services.nepal_locations import location_registry
+
+    require_permission(settings, http_request, "view_case")
+    registry = location_registry()
+    return {
+        "summary": registry.summary(),
+        "query": q,
+        "results": registry.search(q, limit=limit),
+    }
+
+
+@app.post("/api/reference/nepal-locations/resolve")
+def resolve_nepal_location_reference(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.nepal_locations import resolve_nepal_location
+
+    require_permission(settings, http_request, "view_case")
+    text = str(payload.get("text") or "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="text is required")
+    return resolve_nepal_location(text).model_dump()
+
+
+def _address_evidence_record_payload(payload: Dict[str, object], *, tenant_id: str, record_id: str = "") -> Dict[str, object]:
+    from app.services.address_evidence_store import normalize_address_text
+
+    record_payload = dict(payload)
+    record_payload["tenant_id"] = tenant_id
+    if record_id:
+        record_payload["id"] = record_id
+    if not str(record_payload.get("id") or "").strip():
+        slug_parts = [
+            tenant_id,
+            str(record_payload.get("district_name") or record_payload.get("district") or ""),
+            str(record_payload.get("local_level_name") or record_payload.get("local_level") or ""),
+            str(record_payload.get("ward") or ""),
+            str(record_payload.get("kind") or "area_or_tole"),
+            str(record_payload.get("name_en") or record_payload.get("name_np") or uuid.uuid4().hex[:12]),
+        ]
+        slug = re.sub(r"[^0-9a-z]+", "_", normalize_address_text(" ".join(slug_parts))).strip("_")
+        record_payload["id"] = f"addr_{slug or uuid.uuid4().hex}"
+    return record_payload
+
+
+def _address_evidence_record_for_tenant(store, record_id: str, *, tenant_id: str):
+    record = store._records.get(record_id)
+    if record is None or record.disabled or not store._is_visible_to_tenant(record, tenant_id):
+        raise HTTPException(status_code=404, detail="Address evidence record not found")
+    return record
+
+
+@app.get("/api/reference/address-evidence")
+def address_evidence_reference(
+    http_request: Request,
+    q: str = "",
+    district: str = "",
+    local_level: str = "",
+    ward: str = "",
+    limit: int = 10,
+):
+    from app.services.address_evidence_store import load_address_evidence_store
+
+    principal = resolve_principal(settings, http_request)
+    require_permission(settings, http_request, "view_case")
+    store = load_address_evidence_store()
+    return {
+        "query": q,
+        "results": store.search(
+            q,
+            tenant_id=principal.tenant_id,
+            district=district,
+            local_level=local_level,
+            ward=ward,
+            limit=limit,
+        ),
+    }
+
+
+@app.post("/api/reference/address-evidence/resolve")
+def resolve_address_evidence_reference(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.address_intelligence import suggest_address_corrections
+
+    principal = resolve_principal(settings, http_request)
+    require_permission(settings, http_request, "view_case")
+    text = str(payload.get("text") or "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="text is required")
+    target_field = str(payload.get("target_field") or "address")
+    return {
+        "candidates": suggest_address_corrections(
+            text,
+            target_field=target_field,
+            tenant_id=principal.tenant_id,
+        )
+    }
+
+
+@app.post("/api/reference/address-evidence", status_code=201)
+def create_address_evidence_reference(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.address_evidence_store import AddressEvidenceRecord, load_address_evidence_store
+
+    principal = require_permission(settings, http_request, "manage_templates")
+    store = load_address_evidence_store()
+    record = AddressEvidenceRecord.from_payload(
+        _address_evidence_record_payload(payload, tenant_id=principal.tenant_id)
+    )
+    try:
+        return {"record": store.upsert(record)}
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@app.post("/api/reference/address-evidence/import")
+def import_address_evidence_reference(http_request: Request, payload: Dict[str, object] = Body(default_factory=dict)):
+    from app.services.address_evidence_store import AddressEvidenceRecord, load_address_evidence_store
+
+    principal = require_permission(settings, http_request, "manage_templates")
+    store = load_address_evidence_store()
+    records = []
+    for item in list(payload.get("records") or []):
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail="records must contain objects")
+        record = AddressEvidenceRecord.from_payload(_address_evidence_record_payload(item, tenant_id=principal.tenant_id))
+        try:
+            records.append(store.upsert(record))
+        except ValueError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return {"records": records, "count": len(records)}
+
+
+@app.patch("/api/reference/address-evidence/{record_id}")
+def update_address_evidence_reference(
+    record_id: str,
+    http_request: Request,
+    payload: Dict[str, object] = Body(default_factory=dict),
+):
+    from app.services.address_evidence_store import AddressEvidenceRecord, load_address_evidence_store
+
+    principal = require_permission(settings, http_request, "manage_templates")
+    store = load_address_evidence_store()
+    existing = _address_evidence_record_for_tenant(store, record_id, tenant_id=principal.tenant_id)
+    record_payload = existing.model_dump()
+    record_payload.update(payload)
+    record = AddressEvidenceRecord.from_payload(
+        _address_evidence_record_payload(record_payload, tenant_id=existing.tenant_id, record_id=record_id)
+    )
+    try:
+        return {"record": store.upsert(record)}
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@app.delete("/api/reference/address-evidence/{record_id}")
+def delete_address_evidence_reference(record_id: str, http_request: Request):
+    from app.services.address_evidence_store import load_address_evidence_store
+
+    principal = require_permission(settings, http_request, "manage_templates")
+    store = load_address_evidence_store()
+    _address_evidence_record_for_tenant(store, record_id, tenant_id=principal.tenant_id)
+    try:
+        result = store.delete(record_id, tenant_id=principal.tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if not result.get("deleted"):
+        raise HTTPException(status_code=404, detail="Address evidence record not found")
+    result["status"] = "disabled"
+    return result
 
 
 @app.post("/api/analytics/benchmark/samples", status_code=201)
@@ -1210,6 +1407,11 @@ async def upload_document(
         pages=financial_document.pages,
         fields=fields,
         summary=financial_document.summary,
+        document_variant=financial_document.document_variant,
+        assets=financial_document.assets,
+        document_sections=financial_document.document_sections,
+        evidence_ledger=financial_document.evidence_ledger,
+        intelligence=financial_document.intelligence,
         validation_findings=findings,
         audit_events=[
             AuditEvent(
@@ -1272,6 +1474,11 @@ async def reanalyze_document(document_id: str, http_request: Request):
     document.pages = financial_document.pages
     document.fields = fields
     document.summary = financial_document.summary
+    document.document_variant = financial_document.document_variant
+    document.assets = financial_document.assets
+    document.document_sections = financial_document.document_sections
+    document.evidence_ledger = financial_document.evidence_ledger
+    document.intelligence = financial_document.intelligence
     document.validation_findings = findings
     document.audit_events.append(
         AuditEvent(
@@ -1324,6 +1531,11 @@ async def replace_document(
     document.pages = financial_document.pages
     document.fields = fields
     document.summary = financial_document.summary
+    document.document_variant = financial_document.document_variant
+    document.assets = financial_document.assets
+    document.document_sections = financial_document.document_sections
+    document.evidence_ledger = financial_document.evidence_ledger
+    document.intelligence = financial_document.intelligence
     document.validation_findings = findings
     document.review = document.review.model_copy(update={"reviewer": None, "note": None, "reviewed_at": None})
     document.audit_events.append(

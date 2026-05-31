@@ -31,7 +31,8 @@ Fix it by creating a session, sending `X-LipiOCR-API-Key`, or disabling auth for
 | `maker` | Create cases, upload documents, classify, validate, verify. |
 | `checker` | Review cases, approve/reject, export, generate review links. |
 | `auditor` | Read audit, compliance, and reporting views. |
-| `admin` | Full administrative access. |
+| `admin` | Tenant administration, integrations, custom templates, and operational controls. |
+| `super_admin` | Platform administration plus permanent Nepal identity template revision. |
 
 ## Health And Platform
 
@@ -104,6 +105,21 @@ Standalone documents are for packet digitization or documents not attached to an
 | `POST` | `/api/cases/{case_id}/verification/{adapter_key}/run` | Run one adapter. |
 
 Adapters without credentials must return explicit `not_configured` or sandbox status.
+
+## Nepal Reference Data
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/reference/nepal-locations?q={query}&limit={n}` | Search the Nepal administrative registry: province, district, local level, and local level type. |
+| `POST` | `/api/reference/nepal-locations/resolve` | Resolve free-text Nepali/English address text into province, district, municipality/gaunpalika, ward, confidence, and warnings. |
+| `GET` | `/api/reference/address-evidence?q={query}` | Search approved address evidence records for area, tole, road, and street aliases. |
+| `POST` | `/api/reference/address-evidence/resolve` | Resolve free-text OCR address text into scored, auditable address candidates. |
+| `POST` | `/api/reference/address-evidence` | Create a Super Admin approved address evidence record. |
+| `POST` | `/api/reference/address-evidence/import` | Import address evidence records from CSV. |
+| `PATCH` | `/api/reference/address-evidence/{id}` | Update address evidence metadata or aliases. |
+| `DELETE` | `/api/reference/address-evidence/{id}` | Disable an incorrect address evidence record. |
+
+The location resolver is used by document intelligence to fill canonical address fields and flag district/local-level mismatches before export.
 
 ## Templates
 
