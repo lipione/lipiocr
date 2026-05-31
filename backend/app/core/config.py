@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Settings(BaseModel):
@@ -71,6 +71,12 @@ class Settings(BaseModel):
     )
     preview_token_ttl_seconds: int = int(os.getenv("LIPIOCR_PREVIEW_TOKEN_TTL_SECONDS", "900"))
     benchmark_manifest_path: str = os.getenv("LIPIOCR_BENCHMARK_MANIFEST", "")
+    address_evidence_path: str = Field(
+        default_factory=lambda: os.getenv(
+            "LIPIOCR_ADDRESS_EVIDENCE_PATH",
+            "storage/address-evidence/address_evidence.json",
+        )
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

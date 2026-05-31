@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "version": 1,
+    "description": "Development seed for Nepal address intelligence. Tenant-private records should be stored outside Git."
+  },
+  "records": [
+    {
+      "id": "addr_seed_samakhusi",
+      "tenant_id": "system",
+      "visibility": "shared_reference",
+      "kind": "area_or_tole",
+      "province_name": "Bagmati Pradesh",
+      "district_name": "Kathmandu",
+      "local_level_name": "Kathmandu Metropolitan City",
+      "local_level_type": "Mahanagarpalika",
+      "ward": "26",
+      "name_en": "Samakhusi",
+      "name_np": "",
+      "aliases_en": ["Samakushi", "Samakhusi Chowk"],
+      "aliases_np": [],
+      "legacy_aliases": [],
+      "source": "manual_seed",
+      "confidence_weight": 0.84
+    },
+    {
+      "id": "addr_seed_tokha_road",
+      "tenant_id": "system",
+      "visibility": "shared_reference",
+      "kind": "street_or_road",
+      "province_name": "Bagmati Pradesh",
+      "district_name": "Kathmandu",
+      "local_level_name": "Kathmandu Metropolitan City",
+      "local_level_type": "Mahanagarpalika",
+      "ward": "26",
+      "name_en": "Tokha Road",
+      "name_np": "",
+      "aliases_en": ["Tokha Rd", "Tokha Road Kathmandu"],
+      "aliases_np": [],
+      "legacy_aliases": [],
+      "source": "manual_seed",
+      "confidence_weight": 0.82
+    }
+  ]
+}
