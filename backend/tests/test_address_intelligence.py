@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from app.services.address_evidence_store import AddressEvidenceRecord, AddressEvidenceStore
-from app.services.address_intelligence import suggest_address_corrections
+from app.services.address_intelligence import is_address_field_key, suggest_address_corrections
 
 
 def _store(tmp_path: Path) -> AddressEvidenceStore:
@@ -26,6 +28,26 @@ def _store(tmp_path: Path) -> AddressEvidenceStore:
             )
         ],
     )
+
+
+@pytest.mark.parametrize(
+    "field_key",
+    [
+        "address_en",
+        "address_np",
+        "address_ne",
+        "permanent_address_en",
+        "permanent_address_np",
+        "permanent_address_ne",
+        "temporary_address",
+        "contact_address",
+        "birth_place",
+        "ठेगाना",
+        "स्थायी ठेगाना",
+    ],
+)
+def test_is_address_field_key_recognizes_localized_address_keys(field_key: str):
+    assert is_address_field_key(field_key)
 
 
 def test_address_candidate_corrects_misspelled_kathmandu_address(tmp_path: Path):

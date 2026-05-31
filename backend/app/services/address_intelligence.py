@@ -14,8 +14,15 @@ from app.services.nepal_locations import LocationResolution, resolve_nepal_locat
 ADDRESS_FIELD_KEYS = frozenset(
     {
         "address",
+        "address_en",
+        "address_np",
+        "address_ne",
         "permanent_address",
+        "permanent_address_en",
+        "permanent_address_np",
+        "permanent_address_ne",
         "temporary_address",
+        "contact_address",
         "current_address",
         "mailing_address",
         "residential_address",
@@ -26,10 +33,21 @@ ADDRESS_FIELD_KEYS = frozenset(
     }
 )
 
+ADDRESS_FIELD_LANGUAGE_SUFFIXES = ("_en", "_np", "_ne")
+NEPALI_ADDRESS_FIELD_KEYS = frozenset({"ठेगाना", "स्थायी ठेगाना"})
+
 
 def is_address_field_key(key: str) -> bool:
-    normalized = re.sub(r"[^a-z0-9]+", "_", str(key).lower()).strip("_")
-    return normalized in ADDRESS_FIELD_KEYS or normalized.endswith("_address")
+    raw_key = str(key or "").strip()
+    if raw_key in NEPALI_ADDRESS_FIELD_KEYS:
+        return True
+
+    normalized = re.sub(r"[^a-z0-9]+", "_", raw_key.lower()).strip("_")
+    if normalized in ADDRESS_FIELD_KEYS or normalized.endswith("_address"):
+        return True
+
+    base_key = _strip_language_suffix(normalized)
+    return base_key in ADDRESS_FIELD_KEYS or base_key.endswith("_address")
 
 
 def suggest_address_corrections(
@@ -99,6 +117,13 @@ def _search_evidence(
         limit=limit,
     )
     return filtered
+
+
+def _strip_language_suffix(key: str) -> str:
+    for suffix in ADDRESS_FIELD_LANGUAGE_SUFFIXES:
+        if key.endswith(suffix):
+            return key[: -len(suffix)]
+    return key
 
 
 def _candidate_from_evidence(
