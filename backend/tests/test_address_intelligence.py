@@ -133,7 +133,7 @@ def test_document_intelligence_exposes_address_candidates():
 
     assert analysis["address_candidates"]
     candidate = analysis["address_candidates"][0]
-    assert candidate["target_field"] in {"permanent_address", "address_en", "address"}
+    assert candidate["target_field"] in {"permanent_address", "permanent_address_en", "address_en", "address"}
     assert candidate["structured"]["district"] == "Kathmandu"
     assert "address_evidence_store" in candidate["sources"]
 
@@ -155,3 +155,40 @@ def test_apply_document_intelligence_attaches_address_candidates_to_review_field
     assert field.correction_candidates
     assert field.correction_candidates[0]["suggested_value"].startswith("Kathmandu Metropolitan City")
     assert field.original_ocr_value == "Kathmadu Metropolitian ward 26 Samakushi"
+
+
+def test_apply_document_intelligence_attaches_address_candidates_to_generated_fields():
+    document = _document_with_address()
+    fields: list[ExtractedField] = []
+
+    apply_document_intelligence(document, fields)
+
+    generated_address_fields = [field for field in fields if is_address_field_key(field.key)]
+    assert generated_address_fields
+    assert any(field.correction_candidates for field in generated_address_fields)
+
+
+def test_document_intelligence_caps_address_candidates():
+    document = FinancialDocument(
+        filename="many-addresses.txt",
+        pages=[
+            OcrPage(
+                page_number=1,
+                width=1000,
+                height=700,
+                blocks=[
+                    OcrBlock(
+                        text=f"Permanent Address: Kathmadu Metropolitian ward 26 Samakushi {index}",
+                        bbox=[80, 120 + index * 20, 700, 150 + index * 20],
+                        confidence=0.74,
+                        block_type="field_candidate",
+                    )
+                    for index in range(8)
+                ],
+            )
+        ],
+    )
+
+    analysis = analyze_document(document)
+
+    assert len(analysis["address_candidates"]) <= 5

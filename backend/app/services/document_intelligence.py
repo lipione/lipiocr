@@ -1579,27 +1579,32 @@ def _name_candidates(observations: list[FieldObservation]) -> list[dict[str, obj
     return sorted(candidates, key=lambda item: float(item.get("confidence") or 0), reverse=True)
 
 
-def _address_candidates(observations: list[FieldObservation], *, tenant_id: str = "demo-institution") -> list[dict[str, object]]:
+def _address_candidates(
+    observations: list[FieldObservation],
+    *,
+    tenant_id: str = "demo-institution",
+    limit: int = 5,
+) -> list[dict[str, object]]:
     candidates: list[dict[str, object]] = []
     for observation in observations:
         if not is_address_field_key(observation.output_key) and not is_address_field_key(observation.canonical_key):
             continue
-        target_field = observation.canonical_key if is_address_field_key(observation.canonical_key) else observation.output_key
         for suggestion in suggest_address_corrections(
             observation.value,
-            target_field=target_field,
+            target_field=observation.output_key,
             tenant_id=tenant_id,
         ):
             candidates.append(
                 {
                     **suggestion,
                     "canonical_key": observation.canonical_key,
-                    "target_field": target_field,
+                    "target_field": observation.output_key,
                     "source_field_used": "address_intelligence",
                     "original_confidence": observation.confidence,
                 }
             )
-    return sorted(candidates, key=lambda item: float(item.get("confidence") or 0), reverse=True)
+    ordered = sorted(candidates, key=lambda item: float(item.get("confidence") or 0), reverse=True)
+    return ordered[: max(1, int(limit or 1))]
 
 
 def _location_source_value(canonical_fields: dict[str, str], prefix: str) -> str:
@@ -1913,14 +1918,32 @@ def apply_document_intelligence(
     grouped_address_candidates: dict[str, list[dict[str, object]]] = defaultdict(list)
     for candidate in analysis.get("address_candidates", []):
         if isinstance(candidate, dict):
-            grouped_address_candidates[str(candidate.get("target_field") or "")].append(candidate)
+            target_field = str(candidate.get("target_field") or "")
+            canonical_key = str(candidate.get("canonical_key") or "")
+            if target_field:
+                grouped_address_candidates[target_field].append(candidate)
+            if canonical_key and canonical_key != target_field and canonical_key in fields_by_key:
+                grouped_address_candidates[canonical_key].append(candidate)
 
     for target_key, candidates in grouped_address_candidates.items():
         field = fields_by_key.get(target_key)
         if field is None or field.source.startswith("reviewer"):
             continue
         ordered = sorted(candidates, key=lambda item: float(item.get("confidence") or 0), reverse=True)
-        field.correction_candidates = [*field.correction_candidates, *ordered[:5]][:5]
+        merged_candidates = [*field.correction_candidates, *ordered[:5]]
+        unique_candidates: list[dict[str, object]] = []
+        seen_candidates: set[tuple[str, str, str]] = set()
+        for candidate in merged_candidates:
+            identity = (
+                str(candidate.get("target_field") or ""),
+                str(candidate.get("original_ocr_value") or ""),
+                str(candidate.get("suggested_value") or ""),
+            )
+            if identity in seen_candidates:
+                continue
+            seen_candidates.add(identity)
+            unique_candidates.append(candidate)
+        field.correction_candidates = unique_candidates[:5]
         top = ordered[0]
         candidate_confidence = float(top.get("confidence") or field.confidence)
         if candidate_confidence < 0.80:
