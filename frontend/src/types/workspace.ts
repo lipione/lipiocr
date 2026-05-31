@@ -60,6 +60,23 @@ export type DocumentType =
   | "board_resolution"
   | "tax_clearance";
 
+export const documentAssetTypes = ["photo", "fingerprint", "signature", "stamp", "seal", "chip"] as const;
+
+export type DocumentAssetType = (typeof documentAssetTypes)[number];
+
+export const documentSectionSides = ["front", "back", "unknown"] as const;
+
+export type DocumentSectionSide = (typeof documentSectionSides)[number];
+
+export const addressCandidateSources = [
+  "nepal_location_registry",
+  "address_evidence_store",
+  "fuzzy_alias_match",
+  "reviewer_approved",
+] as const;
+
+export type AddressCandidateSource = (typeof addressCandidateSources)[number];
+
 export type OcrBlock = {
   text: string;
   bbox: number[];
@@ -77,6 +94,131 @@ export type OcrPage = {
   ocr_confidence: number;
 };
 
+export type DocumentAsset = {
+  id: string;
+  asset_type: DocumentAssetType | string;
+  label: string;
+  page_number: number;
+  bbox?: number[] | null;
+  confidence: number;
+  source: string;
+  image_crop_uri?: string | null;
+  review_status: string;
+};
+
+export type EvidenceLedgerEntry = {
+  entry_id: string;
+  page_number: number;
+  block_index: number;
+  text: string;
+  normalized_text: string;
+  language: string;
+  block_type: string;
+  confidence: number;
+  bbox?: number[] | null;
+  mapped_field_key?: string | null;
+  asset_type?: string | null;
+  section_id?: string | null;
+  section_side?: DocumentSectionSide | string | null;
+};
+
+export type DocumentSection = {
+  id: string;
+  side: DocumentSectionSide | string;
+  label: string;
+  page_number: number;
+  bbox?: number[] | null;
+  confidence: number;
+  source: string;
+  signals: string[];
+};
+
+export type DocumentVariantMetadata = {
+  key: string;
+  label: string;
+  document_type: DocumentType | string;
+  version_family: string;
+  confidence: number;
+  reason: string;
+  matched_signals: string[];
+};
+
+export type EntityRecord = {
+  entity_key: string;
+  canonical_key: string;
+  original_ne?: string;
+  original_en?: string;
+  normalized_ne?: string;
+  normalized_en?: string;
+  value?: string;
+  normalized_value?: string;
+  source_fields: string[];
+  confidence: number;
+  status: string;
+  audit_reason: string;
+};
+
+export type NameCorrectionCandidate = {
+  canonical_key?: string;
+  target_field?: string;
+  source_field_used?: string;
+  field_key?: string;
+  original_value?: string;
+  original_ocr_value?: string;
+  suggested_value: string;
+  confidence: number;
+  status: string;
+  sources: string[];
+  audit_reason: string;
+  candidate_tokens?: {
+    original: string;
+    suggested_roman: string;
+    suggested_nepali: string;
+    distance: number;
+    frequency: number;
+    sources: string[];
+  }[];
+};
+
+export type AddressCandidate = {
+  target_field: string;
+  original_ocr_value: string;
+  suggested_value: string;
+  structured?: {
+    province?: string;
+    district?: string;
+    local_level?: string;
+    ward?: string;
+    area_or_tole?: string;
+    street_or_road?: string;
+  };
+  confidence: number;
+  status: "suggested" | "needs_review";
+  sources?: string[];
+  score_breakdown?: Record<string, number>;
+  audit_reason?: string;
+};
+
+export type LocationResolution = {
+  field_prefix?: string;
+  source_value?: string;
+  raw_text: string;
+  normalized_text: string;
+  status: string;
+  confidence: number;
+  province_code?: string | null;
+  province_name?: string | null;
+  district_code?: string | null;
+  district_name?: string | null;
+  local_level_code?: string | null;
+  local_level_name?: string | null;
+  local_level_key?: string | null;
+  local_level_type?: string | null;
+  ward?: string | null;
+  warnings: string[];
+  reasons: string[];
+};
+
 export type PreviewOverlayMode = "clean" | "evidence" | "blocks";
 
 export type FinancialDocument = {
@@ -88,6 +230,11 @@ export type FinancialDocument = {
   page_count: number;
   pages: OcrPage[];
   summary: string;
+  document_variant?: string | null;
+  assets?: DocumentAsset[];
+  document_sections?: DocumentSection[];
+  evidence_ledger?: EvidenceLedgerEntry[];
+  intelligence?: DocumentIntelligence | null;
 };
 
 export type DocumentVersion = {
@@ -114,6 +261,11 @@ export type DocumentRecord = {
   pages: OcrPage[];
   fields: ExtractedField[];
   summary: string;
+  document_variant?: string | null;
+  assets?: DocumentAsset[];
+  document_sections?: DocumentSection[];
+  evidence_ledger?: EvidenceLedgerEntry[];
+  intelligence?: DocumentIntelligence | null;
   validation_findings: ValidationFinding[];
   audit_events: AuditEvent[];
   version_history: DocumentVersion[];
@@ -151,6 +303,7 @@ export type ExtractedField = {
   source_field_used?: string | null;
   correction_confidence?: number | null;
   audit_reason?: string | null;
+  correction_candidates?: (NameCorrectionCandidate | AddressCandidate)[];
 };
 
 export type ValidationFinding = {
@@ -223,7 +376,13 @@ export type DocumentIntelligence = {
   declared_document_type: DocumentType;
   confidence: number;
   reason: string;
+  document_variant?: DocumentVariantMetadata;
+  document_sections?: DocumentSection[];
   canonical_fields: Record<string, string>;
+  assets?: DocumentAsset[];
+  evidence_ledger?: EvidenceLedgerEntry[];
+  entity_records?: EntityRecord[];
+  location_resolutions?: LocationResolution[];
   language_pairs: {
     canonical_key: string;
     nepali_field?: string;
@@ -256,6 +415,8 @@ export type DocumentIntelligence = {
     status: string;
     audit_reason: string;
   }[];
+  name_candidates?: NameCorrectionCandidate[];
+  address_candidates?: AddressCandidate[];
   cross_checks: {
     key: string;
     status: string;
@@ -430,6 +591,9 @@ export type TemplateStudio = {
     required_fields: string[];
     status: string;
     mode: string;
+    source?: string;
+    locked?: boolean;
+    validation_rule_count?: number;
   }[];
   profiles?: {
     id: string;

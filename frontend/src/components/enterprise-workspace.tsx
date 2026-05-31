@@ -23,6 +23,7 @@ import {
   Link2,
   Loader2,
   LockKeyhole,
+  MapPin,
   Network,
   Play,
   Plug,
@@ -580,17 +581,23 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const readinessScore = intelligence.data?.readiness_score ?? 0;
   const validationFindings = validation.data?.findings ?? selectedCase?.validation_findings ?? [];
   const packetResults = [...packetDocuments(splitPreview.data), ...packetDocuments(classification.data)].slice(0, 6);
+  const embeddedDocumentIntelligence = selectedDocument?.intelligence ?? null;
   const selectedDocumentIntelligence =
-    section === "documents" && documentLane === "standalone"
-      ? null
-      : intelligence.data?.document_intelligence?.find((item) => item.document_id === selectedDocument?.id) ??
-        intelligence.data?.document_intelligence?.[0] ??
-        null;
+    embeddedDocumentIntelligence ??
+    intelligence.data?.document_intelligence?.find((item) => item.document_id === selectedDocument?.id) ??
+    intelligence.data?.document_intelligence?.[0] ??
+    null;
   const canonicalFieldRows = Object.entries(selectedDocumentIntelligence?.canonical_fields ?? {}).slice(0, 8);
   const semanticChecks = selectedDocumentIntelligence?.cross_checks ?? intelligence.data?.cross_checks ?? [];
   const languagePairs = selectedDocumentIntelligence?.language_pairs ?? intelligence.data?.language_pairs ?? [];
   const confidenceRepairs = selectedDocumentIntelligence?.confidence_repairs ?? intelligence.data?.confidence_repairs ?? [];
   const entityReconciliations = intelligence.data?.entity_reconciliation ?? [];
+  const selectedDocumentVariant = selectedDocumentIntelligence?.document_variant ?? null;
+  const selectedDocumentAssets = selectedDocument?.assets ?? selectedDocumentIntelligence?.assets ?? [];
+  const selectedDocumentSections = selectedDocument?.document_sections ?? selectedDocumentIntelligence?.document_sections ?? [];
+  const selectedEvidenceLedger = selectedDocument?.evidence_ledger ?? selectedDocumentIntelligence?.evidence_ledger ?? [];
+  const selectedEntityRecords = selectedDocumentIntelligence?.entity_records ?? [];
+  const selectedLocationResolutions = selectedDocumentIntelligence?.location_resolutions ?? [];
   const missingFieldCount = editableExtractionFields.filter((field) => !String(field.value ?? "").trim()).length;
   const lowConfidenceCount = editableExtractionFields.filter((field) => normalizedConfidence(field) < 0.8).length;
   const exportReadinessStatus =
@@ -2819,6 +2826,57 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         {pct(selectedDocumentIntelligence.confidence)}
                       </span>
                     </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-5">
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2 text-xs">
+                        <p className="font-semibold text-slate-500">Variant</p>
+                        <p className="mt-1 truncate font-extrabold text-slate-950">
+                          {selectedDocumentVariant ? labelize(selectedDocumentVariant.version_family) : "Unclassified"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2 text-xs">
+                        <p className="font-semibold text-slate-500">Sides</p>
+                        <p className="mt-1 font-mono font-extrabold text-slate-950">{selectedDocumentSections.length}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2 text-xs">
+                        <p className="font-semibold text-slate-500">Ledger</p>
+                        <p className="mt-1 font-mono font-extrabold text-slate-950">{selectedEvidenceLedger.length}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2 text-xs">
+                        <p className="font-semibold text-slate-500">Assets</p>
+                        <p className="mt-1 font-mono font-extrabold text-slate-950">{selectedDocumentAssets.length}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white px-3 py-2 text-xs">
+                        <p className="font-semibold text-slate-500">Locations</p>
+                        <p className="mt-1 font-mono font-extrabold text-slate-950">{selectedLocationResolutions.length}</p>
+                      </div>
+                    </div>
+                    {selectedDocumentVariant ? (
+                      <div className="mt-3 rounded-xl border border-white/80 bg-white px-3 py-2 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-bold text-slate-950">{selectedDocumentVariant.label}</span>
+                          <span className="font-mono font-bold text-cyan-700">{pct(selectedDocumentVariant.confidence)}</span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-slate-500">{selectedDocumentVariant.reason}</p>
+                      </div>
+                    ) : null}
+                    {selectedDocumentSections.length ? (
+                      <div className="mt-3 rounded-xl border border-white/80 bg-white p-3 text-xs">
+                        <p className="font-bold uppercase tracking-[0.12em] text-slate-500">Document Sides</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {selectedDocumentSections.map((section) => (
+                            <div className="rounded-lg bg-slate-50 px-3 py-2" key={section.id}>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-bold text-slate-900">{section.label || labelize(section.side)}</span>
+                                <span className="font-mono font-bold text-cyan-700">{pct(section.confidence)}</span>
+                              </div>
+                              <p className="mt-1 truncate text-slate-500">
+                                Page {section.page_number} · {labelize(section.side)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {canonicalFieldRows.length ? (
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {canonicalFieldRows.map(([key, value]) => (
@@ -2827,6 +2885,113 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                             <p className="mt-1 truncate font-bold text-slate-950">{value}</p>
                           </div>
                         ))}
+                      </div>
+                    ) : null}
+                    {selectedDocumentAssets.length ? (
+                      <div className="mt-3 rounded-xl border border-white/80 bg-white p-3 text-xs">
+                        <p className="font-bold uppercase tracking-[0.12em] text-slate-500">Evidence Assets</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {selectedDocumentAssets.slice(0, 6).map((asset) => (
+                            <div
+                              className="flex items-center justify-between gap-3 rounded-lg bg-cyan-50 px-3 py-2"
+                              key={`${asset.id}-${asset.asset_type}`}
+                            >
+                              <span className="inline-flex min-w-0 items-center gap-2">
+                                <Fingerprint size={14} className="shrink-0 text-cyan-700" />
+                                <span className="truncate font-bold text-slate-900">{labelize(asset.asset_type)}</span>
+                              </span>
+                              <span className="shrink-0 font-mono font-bold text-cyan-700">{pct(asset.confidence)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {selectedEntityRecords.length ? (
+                      <div className="mt-3 rounded-xl border border-white/80 bg-white p-3 text-xs">
+                        <p className="font-bold uppercase tracking-[0.12em] text-slate-500">Bilingual Entity Records</p>
+                        <div className="mt-2 grid gap-2">
+                          {selectedEntityRecords.slice(0, 4).map((record) => (
+                            <div className="rounded-lg bg-slate-50 px-3 py-2" key={record.entity_key}>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-bold text-slate-900">{labelize(record.entity_key)}</span>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 font-semibold text-slate-600">
+                                  <StatusDot status={record.status} />
+                                  {labelize(record.status)}
+                                </span>
+                              </div>
+                              {record.original_ne || record.original_en ? (
+                                <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                                  <p className="truncate text-slate-600">
+                                    <span className="font-semibold text-slate-500">Nepali:</span>{" "}
+                                    {record.original_ne || "Not found"}
+                                  </p>
+                                  <p className="truncate text-slate-600">
+                                    <span className="font-semibold text-slate-500">English:</span>{" "}
+                                    {record.original_en || "Not found"}
+                                  </p>
+                                </div>
+                              ) : (
+                                <p className="mt-1 truncate text-slate-600">{record.value}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {selectedLocationResolutions.length ? (
+                      <div className="mt-3 rounded-xl border border-white/80 bg-white p-3 text-xs">
+                        <p className="font-bold uppercase tracking-[0.12em] text-slate-500">Nepal Location Registry</p>
+                        <div className="mt-2 grid gap-2">
+                          {selectedLocationResolutions.slice(0, 4).map((resolution) => (
+                            <div
+                              className="rounded-lg bg-slate-50 px-3 py-2"
+                              key={`${resolution.field_prefix}-${resolution.source_value}-${resolution.local_level_code ?? resolution.district_code}`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="inline-flex min-w-0 items-center gap-2 font-bold text-slate-900">
+                                  <MapPin size={14} className="shrink-0 text-cyan-700" />
+                                  <span className="truncate">{labelize(resolution.field_prefix ?? "address")}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 font-semibold text-slate-600">
+                                  <StatusDot status={resolution.status} />
+                                  {labelize(resolution.status)}
+                                </span>
+                              </div>
+                              <p className="mt-2 truncate font-semibold text-slate-800">
+                                {[resolution.local_level_key, resolution.district_name, resolution.province_name]
+                                  .filter(Boolean)
+                                  .join(", ") || "Location unresolved"}
+                                {resolution.ward ? ` · Ward ${resolution.ward}` : ""}
+                              </p>
+                              {resolution.warnings.length ? (
+                                <p className="mt-1 line-clamp-2 text-amber-700">{resolution.warnings.map(labelize).join(", ")}</p>
+                              ) : (
+                                <p className="mt-1 line-clamp-2 text-slate-500">
+                                  Registry matched and filled structured province, district, local level, and ward fields.
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {selectedEvidenceLedger.length ? (
+                      <div className="mt-3 rounded-xl border border-white/80 bg-white p-3 text-xs">
+                        <p className="font-bold uppercase tracking-[0.12em] text-slate-500">Evidence Ledger Sample</p>
+                        <div className="mt-2 grid gap-2">
+                          {selectedEvidenceLedger.slice(0, 5).map((entry) => (
+                            <div
+                              className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"
+                              key={entry.entry_id}
+                            >
+                              <span className="font-mono font-bold text-slate-500">p{entry.page_number}</span>
+                              <span className="min-w-0 truncate font-semibold text-slate-800">{entry.text}</span>
+                              <span className="rounded-full bg-white px-2 py-0.5 font-mono font-bold text-slate-500">
+                                {entry.mapped_field_key ? labelize(entry.mapped_field_key) : labelize(entry.block_type)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : null}
                     {semanticChecks.length ? (
@@ -2988,6 +3153,17 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                             const draftValue = fieldDrafts[draftKey] ?? field.value ?? "";
                             const changed = draftValue !== (field.value ?? "");
                             const suggestedValue = field.corrected_value?.trim();
+                            const candidateOptions = field.correction_candidates ?? [];
+                            const isAddressCandidate = candidateOptions.some((candidate) =>
+                              (candidate.sources || []).some((source) =>
+                                [
+                                  "nepal_location_registry",
+                                  "address_evidence_store",
+                                  "fuzzy_alias_match",
+                                  "reviewer_approved",
+                                ].includes(source),
+                              ),
+                            );
                             const hasCorrectionSuggestion = Boolean(suggestedValue && suggestedValue !== field.value);
                             return (
                               <label
@@ -3018,7 +3194,58 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                                   rows={draftValue.length > 80 ? 3 : 2}
                                   value={draftValue}
                                 />
-                                {hasCorrectionSuggestion ? (
+                                {candidateOptions.length ? (
+                                  <span className="mt-3 block rounded-lg border border-cyan-100 bg-cyan-50 px-3 py-2 text-xs">
+                                    <span className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-bold text-cyan-950">
+                                        {isAddressCandidate ? "Possible address matches" : "Possible name matches"}
+                                      </span>
+                                      <span className="text-slate-500">Original: {field.original_ocr_value || field.value}</span>
+                                    </span>
+                                    <span className="mt-2 grid gap-2">
+                                      {candidateOptions.slice(0, 5).map((candidate) => (
+                                        <button
+                                          className="flex min-h-10 items-center justify-between gap-3 rounded-lg border border-white bg-white px-3 py-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)]"
+                                          key={`${draftKey}-${candidate.suggested_value}-${candidate.confidence}`}
+                                          onClick={(event) => {
+                                            event.preventDefault();
+                                            setFieldDrafts((current) => ({
+                                              ...current,
+                                              [draftKey]: candidate.suggested_value,
+                                            }));
+                                          }}
+                                          type="button"
+                                        >
+                                          <span className="min-w-0">
+                                            <span className="block truncate font-extrabold text-slate-950">
+                                              {candidate.suggested_value}
+                                            </span>
+                                            <span className="mt-0.5 block truncate text-slate-500">
+                                              {(candidate.sources ?? []).map(labelize).join(" + ") || "Name lexicon"}
+                                            </span>
+                                            {isAddressCandidate && "score_breakdown" in candidate && candidate.score_breakdown ? (
+                                              <span className="text-[11px] font-semibold text-slate-500">
+                                                {Object.entries(candidate.score_breakdown)
+                                                  .filter(([, score]) => Number(score) > 0)
+                                                  .map(([key]) => labelize(key))
+                                                  .slice(0, 4)
+                                                  .join(" + ")}
+                                              </span>
+                                            ) : null}
+                                          </span>
+                                          <span className="shrink-0 rounded-full bg-cyan-50 px-2 py-1 font-mono font-bold text-cyan-700">
+                                            {pct(candidate.confidence)}
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </span>
+                                    {candidateOptions[0]?.audit_reason ? (
+                                      <span className="mt-2 block line-clamp-2 text-slate-500">
+                                        {candidateOptions[0].audit_reason}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ) : hasCorrectionSuggestion ? (
                                   <span className="mt-3 block rounded-lg border border-cyan-100 bg-cyan-50 px-3 py-2 text-xs">
                                     <span className="flex flex-wrap items-center justify-between gap-2">
                                       <span className="font-bold text-cyan-950">
