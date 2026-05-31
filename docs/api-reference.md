@@ -114,8 +114,8 @@ Adapters without credentials must return explicit `not_configured` or sandbox st
 | `POST` | `/api/reference/nepal-locations/resolve` | Resolve free-text Nepali/English address text into province, district, municipality/gaunpalika, ward, confidence, and warnings. |
 | `GET` | `/api/reference/address-evidence?q={query}` | Search approved address evidence records for area, tole, road, and street aliases. |
 | `POST` | `/api/reference/address-evidence/resolve` | Resolve free-text OCR address text into scored, auditable address candidates. |
-| `POST` | `/api/reference/address-evidence` | Create a Super Admin approved address evidence record. |
-| `POST` | `/api/reference/address-evidence/import` | Import address evidence records from CSV. |
+| `POST` | `/api/reference/address-evidence` | Create a tenant-scoped address evidence record. |
+| `POST` | `/api/reference/address-evidence/import` | Import address evidence records from a `records` list. |
 | `PATCH` | `/api/reference/address-evidence/{id}` | Update address evidence metadata or aliases. |
 | `DELETE` | `/api/reference/address-evidence/{id}` | Disable an incorrect address evidence record. |
 
