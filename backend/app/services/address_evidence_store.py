@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
+import tempfile
+import threading
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterator, Iterable
+
+import fcntl
 
 from app.core.config import get_settings
 from app.services.calendar_intelligence import normalize_nepali_digits
@@ -18,6 +24,10 @@ OCR_SPELLING_OVERRIDES = {
     "kathmadu": "kathmandu",
     "samakushi": "samakhusi",
 }
+VALID_VISIBILITIES = frozenset({"tenant_private", "shared_reference"})
+VALID_KINDS = frozenset({"province", "district", "local_level", "ward", "area_or_tole", "street_or_road"})
+_PATH_LOCKS: dict[str, threading.RLock] = {}
+_PATH_LOCKS_GUARD = threading.Lock()
 
 
 @dataclass
@@ -60,7 +70,7 @@ class AddressEvidenceRecord:
             aliases_np=_string_list(payload.get("aliases_np")),
             legacy_aliases=_string_list(payload.get("legacy_aliases")),
             source=str(payload.get("source") or "manual_seed"),
-            confidence_weight=float(payload.get("confidence_weight") or 0.75),
+            confidence_weight=_confidence_weight(payload.get("confidence_weight")),
             approved_by=str(payload.get("approved_by") or ""),
             created_from_document_id=str(payload.get("created_from_document_id") or ""),
             disabled=bool(payload.get("disabled") or False),
@@ -73,9 +83,10 @@ class AddressEvidenceRecord:
 class AddressEvidenceStore:
     def __init__(self, path: str | Path, seed_records: Iterable[AddressEvidenceRecord] | None = None):
         self.path = Path(path)
-        self._records: dict[str, AddressEvidenceRecord] = {}
+        self._seed_records: dict[str, AddressEvidenceRecord] = {}
         for record in seed_records or []:
-            self._records[record.id] = record
+            self._seed_records[record.id] = record
+        self._records: dict[str, AddressEvidenceRecord] = dict(self._seed_records)
         self._load_persisted_records()
 
     def search(
@@ -88,6 +99,7 @@ class AddressEvidenceStore:
         ward: str = "",
         limit: int = 10,
     ) -> list[dict[str, Any]]:
+        limit = _coerce_limit(limit)
         normalized_query = normalize_address_text(query)
         raw_query = _normalize_address_text(query, apply_ocr_overrides=False)
         if not normalized_query:
@@ -119,17 +131,20 @@ class AddressEvidenceStore:
         return results[:limit]
 
     def upsert(self, record: AddressEvidenceRecord, *, allow_shared_mutation: bool = False) -> dict[str, Any]:
-        existing = self._records.get(record.id)
-        if existing is not None:
-            self._ensure_can_mutate_existing_record(
-                existing,
-                tenant_id=record.tenant_id,
-                allow_shared_mutation=allow_shared_mutation,
-            )
-        if record.visibility == "shared_reference" and not allow_shared_mutation:
-            raise ValueError("Cannot mutate shared address evidence without allow_shared_mutation=True")
-        self._records[record.id] = record
-        self._persist()
+        self._validate_record(record)
+        with self._mutation_lock():
+            self._reload_records_from_disk()
+            existing = self._records.get(record.id)
+            if existing is not None:
+                self._ensure_can_mutate_existing_record(
+                    existing,
+                    tenant_id=record.tenant_id,
+                    allow_shared_mutation=allow_shared_mutation,
+                )
+            if record.visibility == "shared_reference" and not allow_shared_mutation:
+                raise ValueError("Cannot mutate shared address evidence without allow_shared_mutation=True")
+            self._records[record.id] = record
+            self._persist_unlocked()
         return record.model_dump()
 
     def delete(
@@ -140,18 +155,25 @@ class AddressEvidenceStore:
         allow_shared_mutation: bool = False,
     ) -> dict[str, Any]:
         record = self._records.get(record_id)
-        if record is None:
-            return {"id": record_id, "disabled": False, "deleted": False}
         if tenant_id is None:
             raise ValueError("tenant_id is required to delete address evidence")
-        self._ensure_can_mutate_existing_record(
-            record,
-            tenant_id=tenant_id,
-            allow_shared_mutation=allow_shared_mutation,
-        )
-        record.disabled = True
-        self._persist()
+        with self._mutation_lock():
+            self._reload_records_from_disk()
+            record = self._records.get(record_id)
+            if record is None:
+                return {"id": record_id, "disabled": False, "deleted": False}
+            self._ensure_can_mutate_existing_record(
+                record,
+                tenant_id=tenant_id,
+                allow_shared_mutation=allow_shared_mutation,
+            )
+            record.disabled = True
+            self._persist_unlocked()
         return {"id": record_id, "disabled": True, "deleted": True}
+
+    def _reload_records_from_disk(self) -> None:
+        self._records = dict(self._seed_records)
+        self._load_persisted_records()
 
     def _load_persisted_records(self) -> None:
         if not self.path.exists():
@@ -164,12 +186,41 @@ class AddressEvidenceStore:
                     self._records[record.id] = record
 
     def _persist(self) -> None:
+        with self._mutation_lock():
+            self._persist_unlocked()
+
+    def _persist_unlocked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "metadata": {"version": 1, "description": "Tenant address evidence store."},
             "records": [record.model_dump() for record in self._records.values()],
         }
-        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        serialized = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+                tmp_file.write(serialized)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+            os.replace(tmp_name, self.path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+
+    @contextmanager
+    def _mutation_lock(self) -> Iterator[None]:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = self.path.with_suffix(f"{self.path.suffix}.lock")
+        path_key = str(self.path.resolve())
+        with _PATH_LOCKS_GUARD:
+            path_lock = _PATH_LOCKS.setdefault(path_key, threading.RLock())
+        with path_lock:
+            with lock_path.open("a+", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def _is_visible_to_tenant(record: AddressEvidenceRecord, tenant_id: str) -> bool:
@@ -190,6 +241,14 @@ class AddressEvidenceStore:
             return
         if record.visibility == "tenant_private" and record.tenant_id != tenant_id:
             raise ValueError("Cannot mutate address evidence owned by another tenant")
+
+    @staticmethod
+    def _validate_record(record: AddressEvidenceRecord) -> None:
+        if record.visibility not in VALID_VISIBILITIES:
+            raise ValueError(f"Unsupported address evidence visibility: {record.visibility}")
+        if record.kind not in VALID_KINDS:
+            raise ValueError(f"Unsupported address evidence kind: {record.kind}")
+        _confidence_weight(record.confidence_weight)
 
     @staticmethod
     def _matches_filters(record: AddressEvidenceRecord, *, district: str, local_level: str, ward: str) -> bool:
@@ -232,6 +291,28 @@ def normalize_address_text(value: str) -> str:
     return _normalize_address_text(value, apply_ocr_overrides=True)
 
 
+def _coerce_limit(limit: int) -> int:
+    try:
+        parsed = int(limit)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("limit must be between 1 and 100") from exc
+    if parsed < 1 or parsed > 100:
+        raise ValueError("limit must be between 1 and 100")
+    return parsed
+
+
+def _confidence_weight(value: Any) -> float:
+    if value in (None, ""):
+        return 0.75
+    try:
+        weight = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("confidence_weight must be numeric") from exc
+    if weight < 0 or weight > 1:
+        raise ValueError("confidence_weight must be between 0 and 1")
+    return weight
+
+
 def load_address_evidence_store() -> AddressEvidenceStore:
     settings = get_settings()
     return AddressEvidenceStore(path=settings.address_evidence_path, seed_records=_load_seed_records())
@@ -272,7 +353,7 @@ def import_address_evidence_csv(path: str | Path, tenant_id: str, source: str) -
                     aliases_np=_split_aliases(row.get("aliases_np")),
                     legacy_aliases=_split_aliases(row.get("legacy_aliases")),
                     source=source,
-                    confidence_weight=float(row.get("confidence_weight") or 0.75),
+                    confidence_weight=_confidence_weight(row.get("confidence_weight")),
                 )
             )
     return records

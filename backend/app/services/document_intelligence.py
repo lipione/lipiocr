@@ -8,6 +8,7 @@ from typing import Any, Iterable, Optional
 
 import nepali_datetime
 
+from app.core.config import get_settings
 from app.models import (
     DocumentAsset,
     DocumentSection,
@@ -1582,9 +1583,10 @@ def _name_candidates(observations: list[FieldObservation]) -> list[dict[str, obj
 def _address_candidates(
     observations: list[FieldObservation],
     *,
-    tenant_id: str = "demo-institution",
+    tenant_id: str | None = None,
     limit: int = 5,
 ) -> list[dict[str, object]]:
+    effective_tenant_id = tenant_id or get_settings().default_tenant_id
     candidates: list[dict[str, object]] = []
     for observation in observations:
         if not is_address_field_key(observation.output_key) and not is_address_field_key(observation.canonical_key):
@@ -1592,7 +1594,7 @@ def _address_candidates(
         for suggestion in suggest_address_corrections(
             observation.value,
             target_field=observation.output_key,
-            tenant_id=tenant_id,
+            tenant_id=effective_tenant_id,
         ):
             candidates.append(
                 {
@@ -1695,7 +1697,7 @@ def _cross_checks(
     return checks
 
 
-def analyze_document(document: FinancialDocument) -> dict[str, object]:
+def analyze_document(document: FinancialDocument, *, tenant_id: str | None = None) -> dict[str, object]:
     classification = classify_document(document)
     observations = detect_fields(document)
     canonical_fields = _canonical_fields(observations)
@@ -1703,7 +1705,7 @@ def analyze_document(document: FinancialDocument) -> dict[str, object]:
     language_pairs = _language_pairs(canonical_fields, normalizations)
     confidence_repairs = _confidence_repairs(observations)
     name_candidates = _name_candidates(observations)
-    address_candidates = _address_candidates(observations)
+    address_candidates = _address_candidates(observations, tenant_id=tenant_id)
     location_resolutions = _location_resolutions(canonical_fields)
     cross_checks = _cross_checks(canonical_fields, language_pairs, location_resolutions)
     document_variant = detect_document_variant(document, classification)
@@ -1827,8 +1829,10 @@ def _make_field(
 def apply_document_intelligence(
     document: FinancialDocument,
     fields: list[ExtractedField],
+    *,
+    tenant_id: str | None = None,
 ) -> dict[str, object]:
-    analysis = analyze_document(document)
+    analysis = analyze_document(document, tenant_id=tenant_id)
     predicted_type = DocumentType(str(analysis["document_type"]))
     if predicted_type != DocumentType.unknown and document.document_type == DocumentType.unknown:
         document.document_type = predicted_type

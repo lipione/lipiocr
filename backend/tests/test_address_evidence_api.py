@@ -32,6 +32,13 @@ def test_address_evidence_search_returns_reference_results():
     assert payload["results"][0]["name_en"] == "Samakhusi"
 
 
+def test_address_evidence_search_rejects_invalid_limit():
+    response = client.get("/api/reference/address-evidence?q=Samakushi&limit=-1")
+
+    assert response.status_code == 400
+    assert "limit must be between" in response.json()["detail"]
+
+
 def test_address_evidence_resolve_returns_candidates():
     response = client.post(
         "/api/reference/address-evidence/resolve",
@@ -170,6 +177,36 @@ def test_address_evidence_create_rejects_shared_reference_payload(tmp_path):
         )
 
         assert response.status_code == 403
+    finally:
+        _restore_auth_and_store(original)
+
+
+def test_address_evidence_create_rejects_unsupported_record_values(tmp_path):
+    original = _configure_auth_and_store(tmp_path)
+    try:
+        response = client.post(
+            "/api/reference/address-evidence",
+            headers=ADMIN_HEADERS,
+            json={"visibility": "tenant_private", "kind": "planet", "name_en": "Mars"},
+        )
+
+        assert response.status_code == 400
+        assert "Unsupported address evidence kind" in response.json()["detail"]
+    finally:
+        _restore_auth_and_store(original)
+
+
+def test_address_evidence_create_rejects_bad_confidence_weight(tmp_path):
+    original = _configure_auth_and_store(tmp_path)
+    try:
+        response = client.post(
+            "/api/reference/address-evidence",
+            headers=ADMIN_HEADERS,
+            json={"visibility": "tenant_private", "kind": "area_or_tole", "name_en": "Bad Weight", "confidence_weight": "high"},
+        )
+
+        assert response.status_code == 400
+        assert "confidence_weight must be numeric" in response.json()["detail"]
     finally:
         _restore_auth_and_store(original)
 

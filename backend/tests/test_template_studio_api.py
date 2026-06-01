@@ -29,6 +29,51 @@ def test_template_draft_upload_auto_maps_multiple_pages():
     assert fields["address_en"]["page_number"] == 2
 
 
+def test_template_draft_upload_expands_multipage_pdf(monkeypatch, tmp_path):
+    from app import main as main_module
+
+    page_one = tmp_path / "rendered-page-1.txt"
+    page_two = tmp_path / "rendered-page-2.txt"
+    page_one.write_text("Back Me ID Front\nApplicant Name: Hari Sharma\nMobile No: 9841000000", encoding="utf-8")
+    page_two.write_text("Back Me ID Back\nCitizenship No: 12-34-56\nAddress: Kathmandu", encoding="utf-8")
+
+    def fake_expand_template_upload_pages(*args, **kwargs):
+        del args, kwargs
+        return [
+            main_module.ExpandedUploadPage(
+                filename="kyc-packet.pdf page 1",
+                stored_path=page_one,
+                content=page_one.read_bytes(),
+                content_type="text/plain",
+            ),
+            main_module.ExpandedUploadPage(
+                filename="kyc-packet.pdf page 2",
+                stored_path=page_two,
+                content=page_two.read_bytes(),
+                content_type="text/plain",
+            ),
+        ]
+
+    monkeypatch.setattr(main_module, "expand_template_upload_pages", fake_expand_template_upload_pages)
+
+    response = client.post(
+        "/api/admin/templates/drafts",
+        data={"name": "PDF KYC Packet", "document_type": "unknown"},
+        files=[("files", ("kyc-packet.pdf", b"%PDF-1.7 fake but accepted by patched expander", "application/pdf"))],
+    )
+
+    assert response.status_code == 201
+    draft = response.json()["draft"]
+    fields = {field["key"]: field for field in draft["fields"]}
+
+    assert len(draft["pages"]) == 2
+    assert draft["pages"][0]["filename"] == "kyc-packet.pdf page 1"
+    assert fields["applicant_name"]["page_number"] == 1
+    assert fields["mobile"]["page_number"] == 1
+    assert fields["citizenship_number"]["page_number"] == 2
+    assert fields["address_en"]["page_number"] == 2
+
+
 def test_template_draft_uses_label_intelligence_for_blank_nepali_financial_form():
     response = client.post(
         "/api/admin/templates/drafts",

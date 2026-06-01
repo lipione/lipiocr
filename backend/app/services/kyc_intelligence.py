@@ -330,7 +330,7 @@ def _entity_reconciliation(document_intelligence: list[dict[str, object]]) -> li
 
 def build_case_intelligence(case: KycCase) -> dict[str, object]:
     checklist = build_checklist(case)
-    document_intelligence = [analyze_document(document) for document in case.documents]
+    document_intelligence = [analyze_document(document, tenant_id=case.institution_id) for document in case.documents]
     readiness_score = _readiness_score(checklist)
     gaps = [item["key"] for item in checklist if item.get("required") and not item.get("satisfied")]
     if readiness_score == 100:

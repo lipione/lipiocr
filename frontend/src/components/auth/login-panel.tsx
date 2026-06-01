@@ -6,7 +6,20 @@ import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { LipiOcrLogo } from "../brand/lipiocr-logo";
 import type { OperatorPrincipal, OperatorSessionRequest } from "../../lib/auth-client";
 
-const roles = ["maker", "checker", "auditor", "admin"];
+const roles = [
+  { value: "maker", label: "Maker", shortLabel: "Maker" },
+  { value: "checker", label: "Checker", shortLabel: "Checker" },
+  { value: "auditor", label: "Auditor", shortLabel: "Auditor" },
+  { value: "admin", label: "Admin", shortLabel: "Admin" },
+  { value: "super_admin", label: "Super Admin", shortLabel: "Super" },
+];
+
+function roleLabel(value: string, authMethod?: string) {
+  if (value === "system" && authMethod === "disabled") {
+    return "Super Admin (dev)";
+  }
+  return roles.find((role) => role.value === value)?.label ?? value.replace("_", " ");
+}
 
 export function LoginPanel({
   session,
@@ -46,7 +59,7 @@ export function LoginPanel({
               <p className="text-sm font-extrabold text-slate-950">Operator session active</p>
               <p className="mt-1 text-sm font-semibold text-slate-600">
                 {session.user_id} · {session.tenant_id}
-                {session.branch_code ? ` · ${session.branch_code}` : ""} · {session.role}
+                {session.branch_code ? ` · ${session.branch_code}` : ""} · {roleLabel(session.role, session.auth_method)}
               </p>
             </div>
           </div>
@@ -79,7 +92,7 @@ export function LoginPanel({
             </p>
           </div>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[160px_180px_130px_260px_110px] xl:items-center">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[160px_180px_130px_minmax(320px,auto)_110px] xl:items-center">
           <input
             className="h-11 min-w-0 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
             onChange={(event) => setUsername(event.target.value)}
@@ -98,17 +111,17 @@ export function LoginPanel({
             placeholder="Branch"
             value={branchCode}
           />
-          <div className="grid h-11 grid-cols-4 rounded-lg border border-amber-200 bg-white p-1 shadow-sm">
+          <div className="grid h-11 grid-cols-5 rounded-lg border border-amber-200 bg-white p-1 shadow-sm">
             {roles.map((item) => (
               <button
                 className={`rounded-md px-2 text-xs font-extrabold capitalize transition ${
-                  role === item ? "bg-cyan-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                  role === item.value ? "bg-cyan-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
                 }`}
-                key={item}
-                onClick={() => setRole(item)}
+                key={item.value}
+                onClick={() => setRole(item.value)}
                 type="button"
               >
-                {item}
+                {item.shortLabel}
               </button>
             ))}
           </div>

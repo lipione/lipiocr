@@ -76,6 +76,30 @@ def test_binary_upload_uses_configured_ocr_provider(tmp_path: Path):
     assert pages[0].blocks[0].confidence == 0.74
 
 
+def test_binary_upload_falls_back_when_configured_ocr_provider_is_unreachable(tmp_path: Path):
+    from app.services.enterprise_extraction import build_pages_from_upload
+
+    class FailingProvider:
+        name = "failing"
+
+        def read(self, file_path: Path, document_type: DocumentType):
+            raise RuntimeError("vision endpoint unavailable")
+
+    source_path = tmp_path / "scan.jpg"
+    source_path.write_bytes(b"\xff\xd8\xff\xe0")
+
+    pages = build_pages_from_upload(
+        source_path.read_bytes(),
+        "scan.jpg",
+        ocr_provider=FailingProvider(),
+        source_path=source_path,
+        document_type=DocumentType.citizenship,
+    )
+
+    assert pages[0].blocks[0].text.startswith("OCR provider failing unavailable")
+    assert "vision endpoint unavailable" in pages[0].blocks[0].text
+
+
 def test_auth_rbac_enforces_api_key_when_enabled():
     from app.main import settings
 

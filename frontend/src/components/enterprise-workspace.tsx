@@ -25,6 +25,7 @@ import {
   LockKeyhole,
   MapPin,
   Network,
+  Pencil,
   Play,
   Plug,
   Plus,
@@ -34,13 +35,21 @@ import {
   ShieldAlert,
   ShieldCheck,
   SplitSquareHorizontal,
+  Trash2,
   Upload,
   Workflow,
 } from "lucide-react";
 import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createOperatorSession, loadOperatorSession, logoutOperatorSession, type OperatorPrincipal, type OperatorSessionRequest } from "../lib/auth-client";
-import { createAddressEvidence, searchAddressEvidence, type AddressEvidenceRecord } from "../lib/address-evidence";
+import {
+  createAddressEvidence,
+  deleteAddressEvidence,
+  importAddressEvidence,
+  searchAddressEvidence,
+  updateAddressEvidence,
+  type AddressEvidenceRecord,
+} from "../lib/address-evidence";
 import { API_BASE, apiJson, isUnauthorized, listJobs, retryJob } from "../lib/api-client";
 import { computeTemplateDragBbox, type TemplateDragMode } from "../lib/template-canvas";
 import { AccuracyReport } from "./analytics/accuracy-report";
@@ -430,13 +439,18 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const [templateDrag, setTemplateDrag] = useState<TemplateDragState | null>(null);
   const [addressQuery, setAddressQuery] = useState("Samakhusi");
   const [addressResults, setAddressResults] = useState<AddressEvidenceRecord[]>([]);
+  const [addressFilters, setAddressFilters] = useState({ district: "", localLevel: "", ward: "" });
+  const [addressEditingId, setAddressEditingId] = useState<string | null>(null);
+  const [addressImportDraft, setAddressImportDraft] = useState("");
   const [addressDraft, setAddressDraft] = useState({
     district_name: "Kathmandu",
     local_level_name: "Kathmandu Metropolitan City",
     ward: "26",
     kind: "area_or_tole",
     name_en: "",
+    name_np: "",
     aliases_en: "",
+    aliases_np: "",
   });
   const [applicationSearch, setApplicationSearch] = useState("");
   const [documentSearch, setDocumentSearch] = useState("");
@@ -1341,7 +1355,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     setActiveAction("address-search");
     setMessage("Searching address dataset");
     try {
-      const data = await searchAddressEvidence(addressQuery);
+      const data = await searchAddressEvidence(addressQuery, { ...addressFilters, limit: 50 });
       setAddressResults(data.results);
       setMessage(`${data.results.length} address matches`);
     } catch (error) {
@@ -1352,26 +1366,115 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
     }
   }
 
+  function addressDraftPayload(): Partial<AddressEvidenceRecord> {
+    return {
+      ...addressDraft,
+      aliases_en: addressDraft.aliases_en
+        .split("|")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      aliases_np: addressDraft.aliases_np
+        .split("|")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      visibility: "tenant_private",
+      source: "reviewer_approved",
+    };
+  }
+
+  function resetAddressDraft() {
+    setAddressEditingId(null);
+    setAddressDraft((current) => ({ ...current, name_en: "", name_np: "", aliases_en: "", aliases_np: "" }));
+  }
+
+  function startEditingAddressEvidence(record: AddressEvidenceRecord) {
+    setAddressEditingId(record.id);
+    setAddressDraft({
+      district_name: record.district_name ?? "",
+      local_level_name: record.local_level_name ?? "",
+      ward: record.ward ?? "",
+      kind: record.kind || "area_or_tole",
+      name_en: record.name_en ?? "",
+      name_np: record.name_np ?? "",
+      aliases_en: (record.aliases_en ?? []).join(" | "),
+      aliases_np: (record.aliases_np ?? []).join(" | "),
+    });
+  }
+
+  function parseAddressImportRecords(): Partial<AddressEvidenceRecord>[] {
+    const parsed = JSON.parse(addressImportDraft);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      const objectPayload = parsed as { records?: unknown };
+      if (Array.isArray(objectPayload.records)) return objectPayload.records as Partial<AddressEvidenceRecord>[];
+      return [parsed as Partial<AddressEvidenceRecord>];
+    }
+    return [];
+  }
+
   async function handleCreateAddressEvidence(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     setBusy(true);
-    setActiveAction("address-create");
-    setMessage("Adding address record");
+    setActiveAction(addressEditingId ? "address-update" : "address-create");
+    setMessage(addressEditingId ? "Updating address record" : "Adding address record");
     try {
-      const data = await createAddressEvidence({
-        ...addressDraft,
-        aliases_en: addressDraft.aliases_en
-          .split("|")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        visibility: "tenant_private",
-        source: "manual_seed",
+      const data = addressEditingId
+        ? await updateAddressEvidence(addressEditingId, addressDraftPayload())
+        : await createAddressEvidence(addressDraftPayload());
+      setAddressResults((current) => {
+        const remaining = current.filter((record) => record.id !== data.record.id);
+        return [data.record, ...remaining];
       });
-      setAddressResults((current) => [data.record, ...current]);
-      setAddressDraft((current) => ({ ...current, name_en: "", aliases_en: "" }));
-      setMessage("Address record added");
+      resetAddressDraft();
+      setMessage(addressEditingId ? "Address record updated" : "Address record added");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Address create failed");
+      setMessage(error instanceof Error ? error.message : "Address save failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function handleDeleteAddressEvidence(record: AddressEvidenceRecord) {
+    if (record.visibility === "shared_reference") {
+      setMessage("Shared reference records are system-managed");
+      return;
+    }
+    const confirmed = window.confirm(`Delete ${record.name_en || record.name_np || record.id}?`);
+    if (!confirmed) return;
+    setBusy(true);
+    setActiveAction(`address-delete-${record.id}`);
+    setMessage("Deleting address record");
+    try {
+      await deleteAddressEvidence(record.id);
+      setAddressResults((current) => current.filter((item) => item.id !== record.id));
+      if (addressEditingId === record.id) resetAddressDraft();
+      setMessage("Address record deleted");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Address delete failed");
+    } finally {
+      setBusy(false);
+      setActiveAction(null);
+    }
+  }
+
+  async function handleImportAddressEvidence(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    setBusy(true);
+    setActiveAction("address-import");
+    setMessage("Importing address records");
+    try {
+      const records = parseAddressImportRecords();
+      if (!records.length) throw new Error("Paste a JSON object, JSON array, or { records: [...] } payload");
+      const data = await importAddressEvidence(records);
+      setAddressResults((current) => {
+        const importedIds = new Set(data.records.map((record) => record.id));
+        return [...data.records, ...current.filter((record) => !importedIds.has(record.id))];
+      });
+      setAddressImportDraft("");
+      setMessage(`${data.count} address records imported`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Address import failed");
     } finally {
       setBusy(false);
       setActiveAction(null);
@@ -3494,27 +3597,49 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
           <Panel title="Address Dataset" icon={<MapPin size={16} />}>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(360px,0.72fr)]">
               <div className="min-w-0 space-y-3">
-                <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSearchAddressEvidence}>
-                  <input
-                    className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-500/20"
-                    placeholder="Search address names or aliases"
-                    value={addressQuery}
-                    onChange={(event) => setAddressQuery(event.target.value)}
-                  />
-                  <ActionButton busy={activeAction === "address-search"} disabled={busy} icon={<SearchCheck size={14} />} type="submit">
-                    Search
-                  </ActionButton>
+                <form className="rounded-xl border border-slate-200 bg-slate-50 p-3" onSubmit={handleSearchAddressEvidence}>
+                  <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_96px_auto]">
+                    <input
+                      className="h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="Search address names or aliases"
+                      value={addressQuery}
+                      onChange={(event) => setAddressQuery(event.target.value)}
+                    />
+                    <input
+                      className="h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="District"
+                      value={addressFilters.district}
+                      onChange={(event) => setAddressFilters((current) => ({ ...current, district: event.target.value }))}
+                    />
+                    <input
+                      className="h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="Municipality / VDC"
+                      value={addressFilters.localLevel}
+                      onChange={(event) => setAddressFilters((current) => ({ ...current, localLevel: event.target.value }))}
+                    />
+                    <input
+                      className="h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="Ward"
+                      value={addressFilters.ward}
+                      onChange={(event) => setAddressFilters((current) => ({ ...current, ward: event.target.value }))}
+                    />
+                    <ActionButton busy={activeAction === "address-search"} disabled={busy} icon={<SearchCheck size={14} />} type="submit">
+                      Search
+                    </ActionButton>
+                  </div>
                 </form>
                 <div className="max-h-[360px] overflow-auto rounded-xl border border-slate-200">
                   {addressResults.length ? (
                     addressResults.map((record) => (
                       <div
-                        className="grid gap-2 border-b border-slate-100 p-3 text-xs last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_96px]"
+                        className="grid gap-2 border-b border-slate-100 p-3 text-xs last:border-b-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_112px_92px]"
                         key={record.id}
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-slate-950">{record.name_en}</p>
-                          <p className="mt-1 truncate text-slate-500">{labelize(record.kind)}</p>
+                          <p className="truncate text-sm font-bold text-slate-950">{record.name_en || record.name_np || "Unnamed"}</p>
+                          <p className="mt-1 truncate text-slate-500">
+                            {[labelize(record.kind), record.name_np].filter(Boolean).join(" · ")}
+                          </p>
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-slate-700">
@@ -3528,6 +3653,20 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                         <div className="min-w-0 text-right md:text-left">
                           <StatusBadge status={record.visibility ?? "tenant_private"} />
                           <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{record.source ?? "manual_seed"}</p>
+                        </div>
+                        <div className="flex items-center gap-1 lg:justify-end">
+                          <IconButton
+                            ariaLabel="Edit address evidence"
+                            disabled={busy || record.visibility === "shared_reference"}
+                            icon={<Pencil size={14} />}
+                            onClick={() => startEditingAddressEvidence(record)}
+                          />
+                          <IconButton
+                            ariaLabel="Delete address evidence"
+                            disabled={busy || record.visibility === "shared_reference"}
+                            icon={<Trash2 size={14} />}
+                            onClick={() => void handleDeleteAddressEvidence(record)}
+                          />
                         </div>
                       </div>
                     ))
@@ -3543,7 +3682,6 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                     <input
                       className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
                       placeholder="Samakhusi"
-                      required
                       value={addressDraft.name_en}
                       onChange={(event) => setAddressDraft((current) => ({ ...current, name_en: event.target.value }))}
                     />
@@ -3554,6 +3692,22 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                       placeholder="Samakushi | Samakhushi"
                       value={addressDraft.aliases_en}
                       onChange={(event) => setAddressDraft((current) => ({ ...current, aliases_en: event.target.value }))}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Nepali Name">
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="सामाखुसी"
+                      value={addressDraft.name_np}
+                      onChange={(event) => setAddressDraft((current) => ({ ...current, name_np: event.target.value }))}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Nepali Aliases">
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="सामाखुशी | सामाखुसी चोक"
+                      value={addressDraft.aliases_np}
+                      onChange={(event) => setAddressDraft((current) => ({ ...current, aliases_np: event.target.value }))}
                     />
                   </FieldLabel>
                   <FieldLabel label="District">
@@ -3591,15 +3745,39 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   </FieldLabel>
                 </div>
                 <ActionButton
-                  busy={activeAction === "address-create"}
+                  busy={activeAction === "address-create" || activeAction === "address-update"}
                   className="w-full"
-                  disabled={busy || !addressDraft.name_en.trim()}
+                  disabled={busy || (!addressDraft.name_en.trim() && !addressDraft.name_np.trim())}
                   icon={<Plus size={14} />}
                   type="submit"
                   tone="primary"
                 >
-                  Add Record
+                  {addressEditingId ? "Update Record" : "Add Record"}
                 </ActionButton>
+                {addressEditingId ? (
+                  <ActionButton className="w-full" disabled={busy} icon={<RefreshCcw size={14} />} onClick={resetAddressDraft} type="button">
+                    Cancel Edit
+                  </ActionButton>
+                ) : null}
+                <div className="space-y-2 border-t border-slate-200 pt-3">
+                  <SectionLabel icon={<Upload size={15} />} label="Import JSON records" />
+                  <textarea
+                    className="min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                    placeholder='[{"kind":"street_or_road","district_name":"Kathmandu","local_level_name":"Kathmandu Metropolitan City","ward":"26","name_en":"Example Road","aliases_en":["Example Rd"]}]'
+                    value={addressImportDraft}
+                    onChange={(event) => setAddressImportDraft(event.target.value)}
+                  />
+                  <ActionButton
+                    busy={activeAction === "address-import"}
+                    className="w-full"
+                    disabled={busy || !addressImportDraft.trim()}
+                    icon={<Upload size={14} />}
+                    onClick={() => void handleImportAddressEvidence()}
+                    type="button"
+                  >
+                    Import Records
+                  </ActionButton>
+                </div>
               </form>
             </div>
           </Panel>
@@ -4497,6 +4675,29 @@ function ResourceError<T>({ resource }: { resource: ResourceState<T> }) {
       <AlertTriangle className="mt-0.5 shrink-0" size={14} />
       <p className="min-w-0 break-words">{resource.error}</p>
     </div>
+  );
+}
+
+function IconButton({
+  ariaLabel,
+  icon,
+  ...props
+}: {
+  ariaLabel: string;
+  icon: ReactNode;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      aria-label={ariaLabel}
+      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:-translate-y-0.5 hover:border-cyan-200 hover:text-cyan-700 hover:shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-50 ${
+        props.className ?? ""
+      }`}
+      title={ariaLabel}
+      type={props.type ?? "button"}
+    >
+      {icon}
+    </button>
   );
 }
 

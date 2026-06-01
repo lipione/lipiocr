@@ -6,9 +6,14 @@ __pycache__/
 *.pyc
 *.egg-info/
 
+artifacts/
+storage/
+
 backend/.venv/
 backend/storage/uploads/*
 !backend/storage/uploads/.gitkeep
+backend/storage/name-lexicon/*
+!backend/storage/name-lexicon/.gitkeep
 backend/storage/address-evidence/*
 !backend/storage/address-evidence/.gitkeep
 

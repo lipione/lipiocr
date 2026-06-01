@@ -9,9 +9,15 @@ client = TestClient(app)
 
 def test_async_standalone_upload_returns_job_and_status_url():
     original_enabled = settings.async_jobs_enabled
+    original_auth_enabled = settings.api_auth_enabled
     job_queue.clear()
     try:
         settings.async_jobs_enabled = True
+        settings.api_auth_enabled = True
+        client.post(
+            "/api/auth/session",
+            json={"username": "maker.async", "role": "maker", "tenant_id": "tenant-async"},
+        )
         response = client.post(
             "/api/documents/upload",
             data={"document_type": "unknown", "declared_document_type": "unknown"},
@@ -28,8 +34,10 @@ def test_async_standalone_upload_returns_job_and_status_url():
         assert status.status_code == 200
         assert status.json()["id"] == body["job_id"]
         assert status.json()["payload"]["filename"] == "queued.txt"
+        assert status.json()["payload"]["tenant_id"] == "tenant-async"
     finally:
         settings.async_jobs_enabled = original_enabled
+        settings.api_auth_enabled = original_auth_enabled
         job_queue.clear()
 
 

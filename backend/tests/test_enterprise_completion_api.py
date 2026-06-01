@@ -1,6 +1,9 @@
 from fastapi.testclient import TestClient
 
+from app.app_context import settings
 from app.main import app
+from app.models import DocumentType, TemplateField
+import app.services.templates as template_registry
 
 
 client = TestClient(app)
@@ -64,26 +67,85 @@ def test_template_studio_can_upsert_document_template_and_rules():
     response = client.post(
         "/api/admin/templates/studio",
         json={
-            "document_type": "national_id",
-            "name": "National ID Card",
+            "document_type": "bank_statement",
+            "name": "Bank Statement",
             "fields": [
-                {"key": "national_id_number", "label": "National ID Number", "required": True, "bbox": [100, 120, 520, 170]},
-                {"key": "full_name", "label": "Full Name", "required": True, "bbox": [100, 180, 650, 230]},
+                {"key": "account_number", "label": "Account Number", "required": True, "bbox": [100, 120, 520, 170]},
+                {"key": "statement_period", "label": "Statement Period", "required": True, "bbox": [100, 180, 650, 230]},
             ],
-            "validation_rules": [{"field_key": "national_id_number", "rule": "required", "severity": "error"}],
+            "validation_rules": [{"field_key": "account_number", "rule": "required", "severity": "error"}],
         },
     )
 
     assert response.status_code == 201
     body = response.json()
-    assert body["template"]["document_type"] == "national_id"
+    assert body["template"]["document_type"] == "bank_statement"
     assert body["template"]["field_count"] == 2
-    assert body["validation_rules"][0]["field_key"] == "national_id_number"
+    assert body["validation_rules"][0]["field_key"] == "account_number"
 
     studio = client.get("/api/admin/templates/studio").json()
-    national_id = next(item for item in studio["templates"] if item["document_type"] == "national_id")
-    assert national_id["status"] == "configured"
-    assert national_id["field_count"] == 2
+    bank_statement = next(item for item in studio["templates"] if item["document_type"] == "bank_statement")
+    assert bank_statement["status"] == "configured"
+    assert bank_statement["field_count"] == 2
+
+
+def test_only_super_admin_api_key_can_override_permanent_templates():
+    original_enabled = settings.api_auth_enabled
+    original_keys = settings.api_keys
+    before_template = template_registry.get_template(DocumentType.passport)
+    before_rules = template_registry.list_validation_rules()["passport"]
+    payload = {
+        "document_type": "passport",
+        "name": "Super Admin Passport Revision",
+        "fields": [
+            {
+                "key": "passport_number",
+                "label": "Passport Number",
+                "required": True,
+                "bbox": [220, 500, 450, 545],
+            }
+        ],
+        "validation_rules": [{"field_key": "passport_number", "rule": "required", "severity": "error"}],
+    }
+
+    try:
+        settings.api_auth_enabled = True
+        settings.api_keys = "tenant-admin:admin,system-secret:system,root-secret:super_admin"
+
+        admin_response = client.post(
+            "/api/admin/templates/studio",
+            headers={"X-LipiOCR-API-Key": "tenant-admin"},
+            json=payload,
+        )
+        system_response = client.post(
+            "/api/admin/templates/studio",
+            headers={"X-LipiOCR-API-Key": "system-secret"},
+            json=payload,
+        )
+        super_response = client.post(
+            "/api/admin/templates/studio",
+            headers={"X-LipiOCR-API-Key": "root-secret"},
+            json=payload,
+        )
+
+        assert admin_response.status_code == 409
+        assert system_response.status_code == 409
+        assert super_response.status_code == 201
+        assert super_response.json()["template"]["locked"] is True
+        assert super_response.json()["template"]["source"] == "system"
+    finally:
+        template_registry.upsert_template(
+            document_type=DocumentType.passport,
+            name=before_template.name,
+            fields=[
+                TemplateField(key=field.key, label=field.label, required=field.required, bbox=field.bbox)
+                for field in before_template.fields
+            ],
+            validation_rules=before_rules,
+            allow_system_override=True,
+        )
+        settings.api_auth_enabled = original_enabled
+        settings.api_keys = original_keys
 
 
 def test_integration_operations_configure_batch_retry_and_dead_letter():
@@ -154,6 +216,70 @@ def test_accuracy_analytics_records_reviewer_corrections():
     assert body["correction_count"] >= 1
     assert body["field_accuracy"]["citizenship_number"]["corrections"] >= 1
     assert "citizenship" in body["document_type_performance"]
+
+
+def test_standalone_upload_returns_nepal_document_intelligence_payload():
+    response = client.post(
+        "/api/documents/upload",
+        data={"document_type": "unknown"},
+        files={
+            "file": (
+                "old-citizenship.txt",
+                "\n".join(
+                    [
+                        "नेपाल सरकार",
+                        "जिल्ला प्रशासन कार्यालय काठमाडौँ",
+                        "नेपाली नागरिकताको प्रमाणपत्र",
+                        "नाम थर: सीता शर्मा",
+                        "Name: Sita Sharma",
+                        "ना.प्र.नं.: 27-01-78-12345",
+                        "फोटो",
+                        "दायाँ औंठा छाप",
+                        "हस्ताक्षर",
+                    ]
+                ).encode("utf-8"),
+                "text/plain",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["document_type"] == "citizenship"
+    assert body["document_variant"] == "citizenship_old_district_certificate"
+    assert body["document_sections"]
+    assert body["intelligence"]["document_variant"]["key"] == "citizenship_old_district_certificate"
+    assert body["intelligence"]["document_sections"][0]["side"] == "front"
+    assert len(body["evidence_ledger"]) >= 9
+    assert {asset["asset_type"] for asset in body["assets"]}.issuperset({"photo", "fingerprint", "signature"})
+    full_name = next(record for record in body["intelligence"]["entity_records"] if record["entity_key"] == "person.full_name")
+    assert full_name["original_ne"] == "सीता शर्मा"
+    assert full_name["original_en"] == "Sita Sharma"
+
+
+def test_accuracy_analytics_exposes_correction_memory_by_variant_and_handwriting():
+    case = _case_with_document()
+    correction = client.post(
+        "/api/analytics/corrections",
+        json={
+            "case_id": case["id"],
+            "field_key": "full_name_np",
+            "old_value": "सित शर्मा",
+            "new_value": "सीता शर्मा",
+            "corrected_by": "checker.two",
+            "document_type": "citizenship",
+            "document_variant": "citizenship_old_district_certificate",
+            "block_type": "handwriting",
+        },
+    )
+    assert correction.status_code == 201
+
+    analytics = client.get("/api/analytics/accuracy")
+    assert analytics.status_code == 200
+    memory = analytics.json()["correction_memory"]
+    assert memory["variant_memory"]["citizenship_old_district_certificate"]["corrections"] >= 1
+    assert memory["field_memory"]["full_name_np"]["corrections"] >= 1
+    assert memory["handwriting_memory"]["corrections"] >= 1
 
 
 def test_accuracy_benchmark_api_exposes_field_language_and_handwriting_breakdowns():

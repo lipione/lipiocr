@@ -8,12 +8,24 @@ from fastapi import HTTPException
 from app.security.sessions import SessionPrincipal
 
 
+MAKER_PERMISSIONS = {"create_case", "upload_document", "edit_fields", "submit_review", "view_case"}
+CHECKER_PERMISSIONS = {"view_case", "review_case", "approve_case", "reject_case", "export_case"}
+AUDITOR_PERMISSIONS = {"view_case", "view_audit", "export_audit", "export_case"}
+TENANT_ADMIN_PERMISSIONS = (
+    MAKER_PERMISSIONS
+    | CHECKER_PERMISSIONS
+    | AUDITOR_PERMISSIONS
+    | {"admin", "manage_templates", "manage_integrations"}
+)
+SUPER_ADMIN_PERMISSIONS = TENANT_ADMIN_PERMISSIONS | {"manage_system_templates"}
+
 ROLE_PERMISSIONS: Dict[str, set[str]] = {
     "maker": {"create_case", "upload_document", "edit_fields", "submit_review", "view_case"},
     "checker": {"view_case", "review_case", "approve_case", "reject_case", "export_case"},
     "auditor": {"view_case", "view_audit", "export_audit", "export_case"},
-    "admin": {"*"},
-    "system": {"*"},
+    "admin": TENANT_ADMIN_PERMISSIONS,
+    "super_admin": SUPER_ADMIN_PERMISSIONS,
+    "system": TENANT_ADMIN_PERMISSIONS,
 }
 
 
@@ -37,9 +49,19 @@ class Principal:
         )
 
 
-def require_permission_for_principal(principal: Principal, permission: str) -> Principal:
+def has_permission_for_principal(principal: Principal, permission: str) -> bool:
     permissions = ROLE_PERMISSIONS.get(principal.role, set())
-    if "*" not in permissions and permission not in permissions:
+    return "*" in permissions or permission in permissions
+
+
+def can_manage_system_templates(principal: Principal) -> bool:
+    if principal.role == "system" and principal.auth_method == "disabled":
+        return True
+    return has_permission_for_principal(principal, "manage_system_templates")
+
+
+def require_permission_for_principal(principal: Principal, permission: str) -> Principal:
+    if not has_permission_for_principal(principal, permission):
         raise HTTPException(status_code=403, detail=f"Role {principal.role} lacks {permission}")
     return principal
 

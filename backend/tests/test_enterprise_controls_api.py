@@ -21,8 +21,9 @@ def test_tenant_rbac_and_audit_controls_are_exposed():
 
     assert tenant_body["country"] == "Nepal"
     assert "KYC" in tenant_body["enabled_workflows"]
-    assert {"maker", "checker", "auditor", "admin"}.issubset(roles)
+    assert {"maker", "checker", "auditor", "admin", "super_admin"}.issubset(roles)
     assert "approve_case" in roles["checker"]["permissions"]
+    assert "manage_system_templates" in roles["super_admin"]["permissions"]
     assert audit_body["chain_status"] in {"clean", "no_events"}
     assert "events_checked" in audit_body
 

@@ -1,6 +1,6 @@
 from app.core.config import Settings
 from app.models import DocumentType
-from app.services.ocr import GemmaVisionOcrProvider, get_ocr_provider, parse_gemma_ocr_content
+from app.services.ocr import GemmaVisionOcrProvider, get_ocr_provider, observations_from_tesseract_data, parse_gemma_ocr_content
 
 
 def test_parse_gemma_ocr_content_preserves_nepali_handwriting_metadata():
@@ -74,6 +74,26 @@ def test_parse_gemma_ocr_content_preserves_structured_field_candidates():
     assert field_observations[1]["text"] == "00546982"
 
 
+def test_parse_gemma_ocr_content_preserves_identity_document_asset_regions():
+    content = """{
+      "document_type": "citizenship",
+      "lines": [{"text": "नेपाली नागरिकताको प्रमाणपत्र", "confidence": 0.91}],
+      "asset_regions": [
+        {"type": "photo", "label": "Applicant photo", "confidence": 0.84, "bbox": [70, 300, 360, 620]},
+        {"asset_type": "fingerprint", "label": "Right thumbprint", "confidence": 0.80, "bbox": [60, 600, 360, 870]},
+        {"asset_type": "signature", "label": "Holder signature", "confidence": 0.77, "bbox": [90, 650, 380, 720]}
+      ]
+    }"""
+
+    observations = parse_gemma_ocr_content(content)
+
+    asset_observations = [observation for observation in observations if observation["block_type"] in {"photo", "fingerprint", "signature"}]
+    assert [observation["block_type"] for observation in asset_observations] == ["photo", "fingerprint", "signature"]
+    assert asset_observations[0]["field_key"] == "raw_text"
+    assert asset_observations[0]["text"] == "Applicant photo"
+    assert asset_observations[1]["bbox"] == [60, 600, 360, 870]
+
+
 def test_parse_gemma_ocr_content_salvages_lines_from_truncated_json():
     content = '{"lines":[{"text":"नेपाल सरकार","confidence":0.88},{"text":"नाम थर: सीता शर्मा","confidence":0.82},{"text":"unterminated'
 
@@ -138,7 +158,79 @@ def test_gemma_vision_provider_builds_multimodal_request(tmp_path):
     assert http_client.payload["model"] == "gemma-4-26b-4bit"
     assert http_client.payload["messages"][0]["content"][1]["type"] == "image_url"
     assert "fields:[{key,value,confidence,script,language,bbox}]" in http_client.payload["messages"][0]["content"][0]["text"]
+    assert "asset_regions" in http_client.payload["messages"][0]["content"][0]["text"]
+    assert "bbox coordinates must use [left, top, right, bottom]" in http_client.payload["messages"][0]["content"][0]["text"]
+    assert "Do not paraphrase visible text" in http_client.payload["messages"][0]["content"][0]["text"]
     assert "applicant_name" in http_client.payload["messages"][0]["content"][0]["text"]
-    assert http_client.payload["max_tokens"] >= 6000
+    assert http_client.payload["max_tokens"] == 1200
     assert observations[0]["text"] == "हस्तलिखित रकम: ५०००"
     assert observations[0]["block_type"] == "handwriting"
+
+
+def test_gemma_vision_provider_normalizes_transposed_page_coordinates(tmp_path):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"lines":['
+                                '{"text":"Applicant Name","confidence":0.92,"bbox":[360,50,370,130]},'
+                                '{"text":"ASHISH SINGH","confidence":0.91,"bbox":[490,150,505,300]}'
+                                '],'
+                                '"fields":['
+                                '{"key":"applicant_name","value":"ASHISH SINGH","confidence":0.91,'
+                                '"bbox":[490,150,505,300]}'
+                                "]} "
+                            )
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        def post(self, url, json):
+            return FakeResponse()
+
+    image = tmp_path / "ipo.jpg"
+    image.write_bytes(b"\xff\xd8\xff\xe0")
+    provider = GemmaVisionOcrProvider(
+        Settings(gemma_api_base="http://gemma.local/v1", gemma_model="gemma-4-26b-4bit"),
+        http_client=FakeClient(),
+    )
+
+    observations = provider.read(image, DocumentType.ipo_application)
+
+    assert observations[0]["bbox"] == [50, 360, 130, 370]
+    assert observations[1]["bbox"] == [150, 490, 300, 505]
+    assert observations[2]["bbox"] == [150, 490, 300, 505]
+
+
+def test_observations_from_tesseract_data_groups_words_into_line_boxes():
+    data = {
+        "page_num": [1, 1, 1, 1],
+        "block_num": [1, 1, 1, 1],
+        "par_num": [1, 1, 1, 1],
+        "line_num": [1, 1, 2, 2],
+        "text": ["Applicant", "Name", "Mobile", "No"],
+        "conf": ["92", "88", "90", "-1"],
+        "left": [10, 110, 10, 80],
+        "top": [20, 21, 60, 60],
+        "width": [90, 60, 60, 25],
+        "height": [18, 18, 18, 18],
+    }
+
+    observations = observations_from_tesseract_data(data, page_width=714, page_height=1024)
+
+    assert len(observations) == 2
+    assert observations[0]["text"] == "Applicant Name"
+    assert observations[0]["bbox"] == [10, 20, 170, 39]
+    assert observations[0]["confidence"] == 0.9
+    assert observations[0]["page_width"] == 714
+    assert observations[0]["page_height"] == 1024
+    assert observations[1]["text"] == "Mobile No"
+    assert observations[1]["bbox"] == [10, 60, 105, 78]

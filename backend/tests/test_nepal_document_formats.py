@@ -35,8 +35,8 @@ def test_nepal_sample_document_templates_are_configured():
     templates = {template.document_type.value: template for template in template_registry.list_templates()}
 
     expected_fields = {
-        "citizenship": {"name", "dob", "citizenship_number", "address", "father_mother_name"},
-        "national_id": {"national_id_number", "full_name", "dob", "gender", "issue_date"},
+        "citizenship": {"name_ne", "name_en", "dob_bs", "dob_ad", "citizenship_number", "permanent_address_ne", "father_name_ne"},
+        "national_id": {"national_id_number", "full_name_ne", "full_name_en", "dob_bs", "dob_ad", "gender", "issue_date"},
         "passport": {"passport_number", "surname", "given_name", "nationality", "dob", "expiry_date", "mrz_line_1"},
         "driving_license": {"license_number", "full_name", "blood_group", "dob", "citizenship_number", "category"},
         "ipo_application": {"company_name", "application_number", "applicant_name", "applied_units", "amount", "boid"},
@@ -47,6 +47,19 @@ def test_nepal_sample_document_templates_are_configured():
         assert document_type in templates
         configured = {field.key for field in templates[document_type].fields}
         assert field_keys.issubset(configured)
+
+
+def test_nepal_identity_templates_are_permanent_system_templates():
+    template_registry = reload(templates_module)
+
+    assert template_registry.is_system_template(DocumentType.citizenship)
+    assert template_registry.is_system_template(DocumentType.passport)
+    assert template_registry.is_system_template(DocumentType.national_id)
+    assert template_registry.is_system_template(DocumentType.driving_license)
+
+    rules = template_registry.list_validation_rules()
+    for document_type in ("citizenship", "passport", "national_id", "driving_license"):
+        assert any(rule["rule"] == "required" for rule in rules[document_type])
 
 
 def test_template_studio_persists_custom_templates_when_store_enabled(tmp_path, monkeypatch):
@@ -76,6 +89,27 @@ def test_template_studio_persists_custom_templates_when_store_enabled(tmp_path, 
     monkeypatch.delenv("LIPIOCR_LOAD_TEMPLATE_STORE")
     get_settings.cache_clear()
     reload(reloaded_registry)
+
+
+def test_permanent_identity_templates_cannot_be_overwritten():
+    template_registry = reload(templates_module)
+    before = template_registry.get_template(DocumentType.passport)
+
+    try:
+        template_registry.upsert_template(
+            document_type=DocumentType.passport,
+            name="Bad Passport Override",
+            fields=[TemplateField(key="bad", label="Bad", required=False, bbox=[1, 2, 3, 4])],
+            validation_rules=[],
+        )
+    except Exception as exc:
+        assert getattr(exc, "status_code", None) == 409
+    else:
+        raise AssertionError("Permanent passport template was overwritten")
+
+    after = template_registry.get_template(DocumentType.passport)
+    assert after.name == before.name
+    assert {field.key for field in after.fields} == {field.key for field in before.fields}
 
 
 def test_full_page_fallback_extracts_nepal_identity_documents():
@@ -285,6 +319,39 @@ def test_binary_raw_text_ocr_is_split_into_reviewable_lines(tmp_path: Path):
     ]
 
 
+def test_binary_structured_ocr_candidates_are_not_treated_as_printed_labels(tmp_path: Path):
+    from app.services.ocr import OcrObservation
+
+    class CandidateProvider:
+        name = "candidate"
+
+        def read(self, file_path: Path, document_type: DocumentType):
+            return [
+                OcrObservation(
+                    field_key="dp_id",
+                    text="011908",
+                    confidence=0.97,
+                    block_type="text",
+                    language="eng",
+                    bbox=[750, 400, 850, 420],
+                )
+            ]
+
+    source_path = tmp_path / "ipo.jpg"
+    source_path.write_bytes(b"\xff\xd8\xff\xe0")
+
+    pages = build_pages_from_upload(
+        source_path.read_bytes(),
+        "ipo.jpg",
+        ocr_provider=CandidateProvider(),
+        source_path=source_path,
+        document_type=DocumentType.ipo_application,
+    )
+
+    assert pages[0].blocks[0].text == "Dp Id: 011908"
+    assert pages[0].blocks[0].block_type == "field_candidate"
+
+
 def test_binary_ocr_preserves_handwriting_blocks_for_review(tmp_path: Path):
     from app.services.ocr import OcrObservation
 
@@ -391,6 +458,69 @@ def test_process_document_keeps_handwriting_ocr_when_gemma_returns_structured_fi
     assert any(field.key == "amount" and field.source == "gemma_reasoning" for field in fields)
     handwriting_fields = [field for field in fields if field.source == "handwriting_ocr"]
     assert handwriting_fields[0].value == "हस्तलिखित रकम: ५०००"
+
+
+def test_process_document_indexes_lipicore_citizenship_fields_into_intelligence(tmp_path: Path):
+    from app.models import ExtractedField
+    from app.services.gemma import GemmaExtractionResult
+    from app.services.ocr import OcrObservation
+
+    class MinimalProvider:
+        name = "minimal"
+
+        def read(self, file_path: Path, document_type: DocumentType):
+            return [
+                OcrObservation(
+                    field_key="raw_text",
+                    text="नेपाल सरकार\nनेपाली नागरिकताको प्रमाणपत्र",
+                    confidence=0.80,
+                    block_type="text",
+                    language="nep",
+                    bbox=[80, 80, 900, 140],
+                )
+            ]
+
+    class StructuredCitizenshipGemma:
+        settings = Settings(gemma_enabled=True, gemma_model="gemma-4-26b-4bit")
+
+        async def extract(self, *, case_type: CaseType, expected_document_type: DocumentType, pages):
+            return GemmaExtractionResult(
+                document_type=DocumentType.citizenship,
+                summary="Structured citizenship fields",
+                fields=[
+                    ExtractedField(key="citizen_id", label="ना.प्र.नं.", value="२७-०१-७५-१२७५१", confidence=0.92),
+                    ExtractedField(key="date_of_birth", label="जन्म मिति", value="साल: २०५९ महिना: ०७ गते: १७", confidence=0.86),
+                    ExtractedField(
+                        key="permanent_address",
+                        label="Permanent Address",
+                        value="District: Kathmandu Metropolitan : Kathmandu Ward No.:26",
+                        confidence=0.86,
+                    ),
+                ],
+                findings=[],
+            )
+
+    source_path = tmp_path / "citizenship.jpg"
+    source_path.write_bytes(b"\xff\xd8\xff\xe0")
+
+    async def run():
+        return await process_enterprise_document(
+            case_type=CaseType.individual_kyc,
+            filename="citizenship.jpg",
+            content=source_path.read_bytes(),
+            declared_document_type=DocumentType.citizenship,
+            gemma_client=StructuredCitizenshipGemma(),
+            source_path=source_path,
+            ocr_provider=MinimalProvider(),
+        )
+
+    document, fields, _findings = asyncio.run(run())
+    fields_by_key = {field.key: field for field in fields}
+
+    assert fields_by_key["citizenship_number"].value == "27-01-75-12751"
+    assert fields_by_key["dob_bs"].value == "2059-07-17"
+    assert fields_by_key["permanent_address_ward"].value == "26"
+    assert document.intelligence["canonical_fields"]["permanent_address_district"] == "Kathmandu"
 
 
 def test_noisy_nic_asia_asba_ocr_recovers_core_fields(tmp_path: Path):

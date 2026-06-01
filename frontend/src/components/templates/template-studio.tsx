@@ -1,7 +1,22 @@
 "use client";
 
-import { FileCog, FileSearch, FileText, Layers3, Loader2, Plus, Save, ShieldCheck, Trash2, Upload } from "lucide-react";
-import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
+import {
+  FileCog,
+	  FileSearch,
+	  FileText,
+	  Layers3,
+	  Loader2,
+	  LockKeyhole,
+	  Maximize2,
+	  Plus,
+	  Save,
+	  ShieldCheck,
+	  Trash2,
+	  Upload,
+	  ZoomIn,
+	  ZoomOut,
+	} from "lucide-react";
+	import { FormEvent, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useState } from "react";
 
 import { API_BASE } from "../../lib/api-client";
 import type { TemplateDragMode } from "../../lib/template-canvas";
@@ -96,12 +111,21 @@ export function TemplateStudioPanel({
       : templateFiles.length === 1
         ? templateFiles[0].name
         : `${templateFiles.length} pages selected`;
+	  const selectedPermanentTemplate = (templateStudio.data?.templates ?? []).find(
+	    (template) => template.document_type === templateDocumentType && template.locked,
+	  );
+	  const [templateZoom, setTemplateZoom] = useState(1);
+	  const zoomPercent = Math.round(templateZoom * 100);
 
-  return (
-    <TemplatePanel title="Template Creation Studio" icon={<FileCog size={16} />}>
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-4">
-          <form className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-3" onSubmit={uploadTemplateDraft}>
+	  function adjustTemplateZoom(delta: number) {
+	    setTemplateZoom((current) => Math.min(2.5, Math.max(0.5, Number((current + delta).toFixed(2)))));
+	  }
+	
+	  return (
+	    <TemplatePanel title="Template Creation Studio" icon={<FileCog size={16} />}>
+	      <div className="grid gap-4 2xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+	        <div className={`min-w-0 space-y-4 ${templateDraft ? "order-2 2xl:order-1" : "order-1"}`}>
+          <form className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-3" data-template-upload-card onSubmit={uploadTemplateDraft}>
             <TemplateSectionLabel icon={<Upload size={15} />} label="Upload Template Pages" />
             <label className="block text-xs font-bold text-slate-600">
               Template name
@@ -120,6 +144,11 @@ export function TemplateStudioPanel({
                 value={templateDocumentType}
                 onChange={(value) => setTemplateDocumentType(value as DocumentType)}
               />
+              {selectedPermanentTemplate ? (
+                <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
+                  {selectedPermanentTemplate.name} is a permanent Nepal ID template. Publishing revisions requires Super Admin access.
+                </p>
+              ) : null}
             </div>
             <label className="mt-3 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-cyan-200 bg-white px-3 text-center text-sm font-bold text-cyan-700 transition hover:-translate-y-0.5 hover:border-cyan-400">
               <Upload size={18} />
@@ -127,6 +156,7 @@ export function TemplateStudioPanel({
               <span className="mt-1 text-xs font-medium text-slate-500">Front/back IDs, forms, PDFs, or page images</span>
               <input
                 className="sr-only"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.gif,.avif,.txt"
                 multiple
                 onChange={(event) => setTemplateFiles(Array.from(event.target.files ?? []))}
                 type="file"
@@ -198,6 +228,41 @@ export function TemplateStudioPanel({
 
           <div className="rounded-2xl border border-slate-200 p-3">
             <div className="flex items-center justify-between gap-2">
+              <TemplateSectionLabel icon={<LockKeyhole size={15} />} label="Permanent Templates" />
+              <span className="font-mono text-xs text-slate-500">
+                {(templateStudio.data?.templates ?? []).filter((template) => template.locked).length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {(templateStudio.data?.templates ?? [])
+                .filter((template) => template.locked)
+                .map((template) => (
+	                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" key={template.document_type}>
+	                    <div className="flex items-center justify-between gap-2">
+	                      <p className="truncate font-bold">{template.name}</p>
+	                      <TemplateStatusBadge status={template.status} />
+	                    </div>
+	                    <p className="mt-1 truncate text-slate-500">
+	                      {template.field_count} fields · Super Admin revision only
+	                    </p>
+	                    <button
+	                      className="mt-3 inline-flex h-8 w-full items-center justify-center rounded-lg border border-cyan-200 bg-white px-3 text-xs font-extrabold text-cyan-800 transition hover:border-cyan-400 hover:bg-cyan-50"
+	                      onClick={() => {
+	                        setTemplateDocumentType(template.document_type as DocumentType);
+	                        setTemplateName(`${template.name} Revision`);
+	                        document.querySelector("[data-template-upload-card]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+	                      }}
+	                      type="button"
+	                    >
+	                      Revise Template
+	                    </button>
+	                  </div>
+	                ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-3">
+            <div className="flex items-center justify-between gap-2">
               <TemplateSectionLabel icon={<FileText size={15} />} label="Published Profiles" />
               <span className="font-mono text-xs text-slate-500">{templateStudio.data?.profiles?.length ?? 0}</span>
             </div>
@@ -218,104 +283,196 @@ export function TemplateStudioPanel({
           </div>
         </div>
 
-        <div className="min-w-0 space-y-3">
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <TemplateInfo label="Draft" value={templateDraft ? labelize(templateDraft.status) : "None"} />
-            <TemplateInfo label="Pages" value={`${templateDraft?.pages.length ?? 0}`} />
-            <TemplateInfo label="Fields" value={`${templateDraft?.fields.length ?? 0}`} />
-            <TemplateInfo label="Quality" value={templateDraft ? pct(templateDraft.quality_score) : "0%"} />
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-            <div className="border-b border-slate-200 bg-white p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase text-slate-500">Canvas Editor</p>
-                  <p className="mt-1 truncate text-sm font-bold text-slate-950">
-                    {selectedTemplatePage ? `Page ${selectedTemplatePage.page_number} · ${selectedTemplatePage.filename}` : "No page selected"}
-                  </p>
+	        <div className={`min-w-0 space-y-3 ${templateDraft ? "order-1 2xl:order-2" : "order-2"}`}>
+	          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+	            <TemplateInfo label="Draft" value={templateDraft ? labelize(templateDraft.status) : "None"} />
+	            <TemplateInfo label="Pages" value={`${templateDraft?.pages.length ?? 0}`} />
+	            <TemplateInfo label="Fields" value={`${templateDraft?.fields.length ?? 0}`} />
+	            <TemplateInfo label="Quality" value={templateDraft ? pct(templateDraft.quality_score) : "0%"} />
+	          </div>
+	          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[var(--shadow-soft)]">
+	            <div className="border-b border-slate-200 bg-white p-3">
+	              <div className="flex flex-wrap items-center justify-between gap-3">
+	                <div className="min-w-0">
+	                  <p className="text-xs font-bold uppercase text-slate-500">Canvas Editor</p>
+	                  <p className="mt-1 truncate text-sm font-bold text-slate-950">
+	                    {selectedTemplatePage ? `Page ${selectedTemplatePage.page_number} · ${selectedTemplatePage.filename}` : "No page selected"}
+	                  </p>
+	                </div>
+	                <div className="flex flex-wrap items-center justify-end gap-2">
+	                  <div className="inline-flex h-10 items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+	                    <button
+	                      aria-label="Zoom out"
+	                      className="inline-flex h-10 w-10 items-center justify-center text-slate-700 transition hover:bg-white disabled:opacity-40"
+	                      disabled={templateZoom <= 0.5}
+	                      onClick={() => adjustTemplateZoom(-0.1)}
+	                      type="button"
+	                    >
+	                      <ZoomOut size={15} />
+	                    </button>
+	                    <span className="min-w-14 border-x border-slate-200 px-3 text-center font-mono text-xs font-extrabold text-slate-700">
+	                      {zoomPercent}%
+	                    </span>
+	                    <button
+	                      aria-label="Zoom in"
+	                      className="inline-flex h-10 w-10 items-center justify-center text-slate-700 transition hover:bg-white disabled:opacity-40"
+	                      disabled={templateZoom >= 2.5}
+	                      onClick={() => adjustTemplateZoom(0.1)}
+	                      type="button"
+	                    >
+	                      <ZoomIn size={15} />
+	                    </button>
+	                  </div>
+	                  <button
+	                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-extrabold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50"
+	                    onClick={() => setTemplateZoom(1)}
+	                    type="button"
+	                  >
+	                    <Maximize2 size={14} />
+	                    Fit
+	                  </button>
+	                  <TemplateActionButton disabled={!templateDraft || !selectedTemplatePage} icon={<Plus size={14} />} onClick={addTemplateField}>
+	                    Add Box
+	                  </TemplateActionButton>
+	                  <TemplateActionButton
+	                    disabled={!selectedTemplateField}
+	                    icon={<Trash2 size={14} />}
+	                    onClick={() => selectedTemplateField && deleteTemplateField(selectedTemplateField.id)}
+	                  >
+	                    Remove Box
+	                  </TemplateActionButton>
+	                </div>
+	              </div>
+	              {templateDraft?.pages.length ? (
+	                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+	                  {templateDraft.pages.map((page) => {
+	                    const active = page.page_number === selectedTemplatePage?.page_number;
+	                    const pageFieldCount = templateDraft.fields.filter((field) => field.page_number === page.page_number).length;
+	                    return (
+	                      <button
+	                        className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-extrabold transition ${
+	                          active
+	                            ? "border-cyan-500 bg-cyan-50 text-cyan-900"
+	                            : "border-slate-200 bg-white text-slate-600 hover:border-cyan-200"
+	                        }`}
+	                        key={page.id}
+	                        onClick={() => {
+	                          setSelectedTemplatePageNumber(page.page_number);
+	                          setSelectedTemplateFieldId(
+	                            templateDraft.fields.find((field) => field.page_number === page.page_number)?.id ?? null,
+	                          );
+	                        }}
+	                        type="button"
+	                      >
+	                        Page {page.page_number}
+	                        <span className="rounded-full bg-white px-2 py-0.5 font-mono">{pageFieldCount}</span>
+	                      </button>
+	                    );
+	                  })}
+	                </div>
+	              ) : null}
+	              {selectedTemplateField ? (
+	                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+	                  <span className="max-w-full truncate rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 font-extrabold text-cyan-900">
+	                    {selectedTemplateField.label}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-mono text-slate-600">
+                    {selectedTemplateField.bbox.join(", ")}
+                  </span>
                 </div>
-                <TemplateActionButton disabled={!templateDraft || !selectedTemplatePage} icon={<Plus size={14} />} onClick={addTemplateField}>
-                  Add Box
-                </TemplateActionButton>
-              </div>
+              ) : null}
             </div>
-            <div
-              className="relative mx-auto min-h-[460px] w-full overflow-hidden bg-white"
-              ref={templateCanvasRef}
-              style={{ aspectRatio: pageAspectRatio(selectedTemplatePage) }}
-            >
-              {selectedTemplatePage?.image_uri ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt={`${selectedTemplatePage.filename} template page`}
-                  className="absolute inset-0 h-full w-full object-contain"
-                  draggable={false}
-                  src={sourceImageUrl(selectedTemplatePage.image_uri) ?? ""}
-                />
-              ) : selectedTemplatePage ? (
-                <div className="absolute inset-0 p-5 text-xs text-slate-600">
-                  {selectedTemplatePage.blocks.slice(0, 18).map((block, index) => (
-                    <p className="mb-2 rounded-lg bg-slate-50 px-3 py-2" key={`${block.text}-${index}`}>
-                      {block.text}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
-                  Upload template pages to see the canvas.
-                </div>
-              )}
-              {selectedTemplatePage
-                ? selectedTemplatePageFields.map((field) => {
-                    const active = field.id === selectedTemplateField?.id;
-                    const dragging = templateDrag?.fieldId === field.id;
-                    return (
-                      <div
-                        aria-label={`${field.label} field box`}
-                        className={`absolute touch-none rounded-[4px] border text-left transition ${
-                          active
-                            ? "border-cyan-600 bg-cyan-300/15 shadow-[0_0_0_2px_rgba(14,165,168,0.2)]"
-                            : "border-emerald-500/70 bg-emerald-300/10 hover:border-cyan-500"
-                        } ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
-                        key={field.id}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedTemplateFieldId(field.id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedTemplateFieldId(field.id);
-                          }
-                        }}
-                        onPointerDown={(event) => startTemplateFieldDrag(event, field, "move")}
-                        role="button"
-                        style={bboxStyle(field.bbox, selectedTemplatePage)}
-                        tabIndex={0}
-                        title={`${field.label} · ${field.key}`}
-                      >
-                        <span className="m-1 inline-block max-w-[90%] truncate rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-900 shadow-sm">
-                          {field.label}
-                        </span>
-                        {active
-                          ? templateResizeHandles.map((handle) => (
-                              <span
-                                aria-hidden="true"
-                                className={`absolute h-3 w-3 rounded-full border-2 border-white bg-cyan-600 shadow-[0_2px_8px_rgba(14,165,168,0.35)] ${handle.className}`}
-                                key={handle.mode}
-                                onPointerDown={(event) => startTemplateFieldDrag(event, field, handle.mode)}
-                              />
-                            ))
-                          : null}
-                      </div>
-                    );
-                  })
-                : null}
-            </div>
-          </div>
-        </div>
+	            <div className="max-h-[82vh] overflow-auto bg-[linear-gradient(45deg,#f8fafc_25%,transparent_25%),linear-gradient(-45deg,#f8fafc_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f8fafc_75%),linear-gradient(-45deg,transparent_75%,#f8fafc_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0] p-6">
+	              <div
+	                className="relative mx-auto w-full overflow-hidden bg-white shadow-[0_18px_50px_rgba(15,23,42,0.18),inset_0_0_0_1px_rgba(226,232,240,0.95)] transition-[width] duration-200"
+	                ref={templateCanvasRef}
+	                style={{ aspectRatio: pageAspectRatio(selectedTemplatePage), width: selectedTemplatePage ? `${templateZoom * 100}%` : "100%" }}
+	              >
+	                {selectedTemplatePage?.image_uri ? (
+	                  // eslint-disable-next-line @next/next/no-img-element
+	                  <img
+	                    alt={`${selectedTemplatePage.filename} template page`}
+	                    className="absolute inset-0 h-full w-full object-contain"
+	                    draggable={false}
+	                    src={sourceImageUrl(selectedTemplatePage.image_uri) ?? ""}
+	                  />
+	                ) : selectedTemplatePage ? (
+	                  <div className="absolute inset-0 p-5 text-xs text-slate-600">
+	                    {selectedTemplatePage.blocks.slice(0, 18).map((block, index) => (
+	                      <p className="mb-2 rounded-lg bg-slate-50 px-3 py-2" key={`${block.text}-${index}`}>
+	                        {block.text}
+	                      </p>
+	                    ))}
+	                  </div>
+	                ) : (
+	                  <div className="absolute inset-0 flex min-h-[620px] items-center justify-center text-sm text-slate-500">
+	                    Upload template pages to see the canvas.
+	                  </div>
+	                )}
+	                {selectedTemplatePage
+	                  ? selectedTemplatePageFields.map((field, index) => {
+	                      const active = field.id === selectedTemplateField?.id;
+	                      const dragging = templateDrag?.fieldId === field.id;
+	                      return (
+	                        <div
+	                          aria-label={`${field.label} field box`}
+	                          className={`group absolute touch-none rounded-[5px] border-2 text-left transition ${
+	                            active
+	                              ? "border-cyan-600 bg-cyan-300/10 shadow-[0_0_0_2px_rgba(14,165,168,0.22),0_10px_24px_rgba(14,116,144,0.16)]"
+	                              : "border-emerald-500/55 bg-transparent hover:border-cyan-500 hover:bg-cyan-300/10"
+	                          } ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+	                          key={field.id}
+	                          onClick={(event) => {
+	                            event.stopPropagation();
+	                            setSelectedTemplateFieldId(field.id);
+	                          }}
+	                          onKeyDown={(event) => {
+	                            if (event.key === "Enter" || event.key === " ") {
+	                              event.preventDefault();
+	                              setSelectedTemplateFieldId(field.id);
+	                            }
+	                          }}
+	                          onPointerDown={(event) => startTemplateFieldDrag(event, field, "move")}
+	                          role="button"
+	                          style={bboxStyle(field.bbox, selectedTemplatePage)}
+	                          tabIndex={0}
+	                          title={`${field.label} · ${field.key}`}
+	                        >
+	                          <span
+	                            className={`pointer-events-none absolute left-1 top-1 inline-flex max-w-[90%] items-center gap-1 rounded-md border border-slate-200 bg-white/95 px-2 py-1 text-[11px] font-extrabold text-slate-950 shadow-sm transition ${
+	                              active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+	                            }`}
+	                          >
+	                            {field.label}
+	                          </span>
+	                          <span
+	                            aria-hidden="true"
+	                            className={`pointer-events-none absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full border border-white px-1 font-mono text-[10px] font-extrabold shadow-sm transition ${
+	                              active ? "bg-cyan-600 text-white opacity-100" : "bg-emerald-500 text-white opacity-70 group-hover:opacity-100"
+	                            }`}
+	                          >
+	                            {index + 1}
+	                          </span>
+	                          {active
+	                            ? templateResizeHandles.map((handle) => (
+	                                <span
+	                                  aria-hidden="true"
+	                                  className={`absolute h-4 w-4 rounded-full border-2 border-white bg-cyan-600 shadow-[0_2px_10px_rgba(14,165,168,0.45)] ${handle.className}`}
+	                                  key={handle.mode}
+	                                  onPointerDown={(event) => startTemplateFieldDrag(event, field, handle.mode)}
+	                                />
+	                              ))
+	                            : null}
+	                        </div>
+	                      );
+	                    })
+	                  : null}
+	              </div>
+	            </div>
+	          </div>
+	        </div>
 
-        <div className="min-w-0 space-y-4">
+	        <div className="order-3 min-w-0 space-y-4">
           <div className="rounded-2xl border border-slate-200 p-3">
             <div className="flex items-center justify-between gap-2">
               <TemplateSectionLabel icon={<FileSearch size={15} />} label="Fields" />

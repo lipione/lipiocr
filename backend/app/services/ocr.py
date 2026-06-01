@@ -2,6 +2,7 @@ import base64
 import json
 import mimetypes
 import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol
 
@@ -49,6 +50,21 @@ def _block_type(raw: Dict[str, object]) -> str:
     return "handwriting" if "hand" in marker else "text"
 
 
+def _asset_block_type(raw: Dict[str, object]) -> str:
+    marker = str(raw.get("asset_type") or raw.get("type") or raw.get("block_type") or "").lower().strip()
+    if marker in {"photo", "portrait", "face"}:
+        return "photo"
+    if marker in {"fingerprint", "thumbprint", "left_thumbprint", "right_thumbprint"}:
+        return "fingerprint"
+    if marker in {"signature", "sign"}:
+        return "signature"
+    if marker in {"stamp", "seal"}:
+        return "stamp"
+    if marker in {"chip", "card_chip"}:
+        return "chip"
+    return "visual_asset"
+
+
 def _valid_bbox(value: object) -> Optional[List[int]]:
     if not isinstance(value, list) or len(value) != 4:
         return None
@@ -56,6 +72,100 @@ def _valid_bbox(value: object) -> Optional[List[int]]:
         return [int(coordinate) for coordinate in value]
     except (TypeError, ValueError):
         return None
+
+
+def _bbox_size(bbox: List[int]) -> tuple[int, int]:
+    return abs(int(bbox[2]) - int(bbox[0])), abs(int(bbox[3]) - int(bbox[1]))
+
+
+def _text_weight(value: object) -> int:
+    return len(re.sub(r"\s+", "", str(value or "")))
+
+
+def looks_like_transposed_bbox(bbox: List[int], text: object = "") -> bool:
+    width, height = _bbox_size(bbox)
+    if width <= 0 or height <= 0:
+        return False
+    if _text_weight(text) < 2:
+        return False
+    return width <= 80 and height >= max(50, width * 2)
+
+
+def normalize_bbox_orientation(bbox: List[int], text: object = "") -> List[int]:
+    if looks_like_transposed_bbox(bbox, text):
+        return [bbox[1], bbox[0], bbox[3], bbox[2]]
+    return bbox
+
+
+def normalize_gemma_observation_bboxes(observations: List[OcrObservation]) -> List[OcrObservation]:
+    normalized: List[OcrObservation] = []
+    for observation in observations:
+        bbox = observation.get("bbox")
+        if isinstance(bbox, list) and len(bbox) == 4:
+            observation = OcrObservation(observation)
+            observation["bbox"] = normalize_bbox_orientation([int(value) for value in bbox], observation.get("text"))
+        normalized.append(observation)
+    return normalized
+
+
+def _as_int(value: object, fallback: int = 0) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def observations_from_tesseract_data(data: Dict[str, List[object]], *, page_width: int, page_height: int) -> List[OcrObservation]:
+    grouped: Dict[tuple[object, object, object, object], list[dict[str, object]]] = defaultdict(list)
+    texts = data.get("text", [])
+    for index, raw_text in enumerate(texts):
+        text = str(raw_text or "").strip()
+        if not text:
+            continue
+        confidence = _as_float((data.get("conf") or [])[index] if index < len(data.get("conf", [])) else None, -1)
+        left = _as_int((data.get("left") or [])[index] if index < len(data.get("left", [])) else None)
+        top = _as_int((data.get("top") or [])[index] if index < len(data.get("top", [])) else None)
+        width = _as_int((data.get("width") or [])[index] if index < len(data.get("width", [])) else None)
+        height = _as_int((data.get("height") or [])[index] if index < len(data.get("height", [])) else None)
+        if width <= 0 or height <= 0:
+            continue
+        key = (
+            (data.get("page_num") or [1])[index] if index < len(data.get("page_num", [])) else 1,
+            (data.get("block_num") or [1])[index] if index < len(data.get("block_num", [])) else 1,
+            (data.get("par_num") or [1])[index] if index < len(data.get("par_num", [])) else 1,
+            (data.get("line_num") or [index])[index] if index < len(data.get("line_num", [])) else index,
+        )
+        grouped[key].append(
+            {
+                "text": text,
+                "confidence": confidence,
+                "bbox": [left, top, left + width, top + height],
+            }
+        )
+
+    observations: List[OcrObservation] = []
+    for _key, words in sorted(grouped.items(), key=lambda item: (min(word["bbox"][1] for word in item[1]), min(word["bbox"][0] for word in item[1]))):
+        text = " ".join(str(word["text"]) for word in words)
+        confidences = [float(word["confidence"]) for word in words if float(word["confidence"]) >= 0]
+        bbox = [
+            min(int(word["bbox"][0]) for word in words),
+            min(int(word["bbox"][1]) for word in words),
+            max(int(word["bbox"][2]) for word in words),
+            max(int(word["bbox"][3]) for word in words),
+        ]
+        observations.append(
+            OcrObservation(
+                field_key="raw_text",
+                text=text,
+                confidence=round((sum(confidences) / len(confidences)) / 100, 2) if confidences else 0.45,
+                block_type="text",
+                language="mixed",
+                bbox=bbox,
+                page_width=page_width,
+                page_height=page_height,
+            )
+        )
+    return observations
 
 
 def _decode_json_string(value: str) -> str:
@@ -138,6 +248,26 @@ def parse_gemma_ocr_content(content: str) -> List[OcrObservation]:
             confidence=_as_float(raw.get("confidence"), 0.62),
             block_type=_block_type(raw),
             language=str(raw.get("language") or raw.get("lang") or "mixed"),
+        )
+        bbox = _valid_bbox(raw.get("bbox"))
+        if bbox is not None:
+            observation["bbox"] = bbox
+        observations.append(observation)
+
+    raw_assets = payload.get("asset_regions") or payload.get("assets") or payload.get("visual_regions") or []
+    for raw in raw_assets:
+        if not isinstance(raw, dict):
+            continue
+        block_type = _asset_block_type(raw)
+        label = str(raw.get("label") or raw.get("asset_type") or raw.get("type") or block_type).strip()
+        if not label:
+            continue
+        observation = OcrObservation(
+            field_key="raw_text",
+            text=label,
+            confidence=_as_float(raw.get("confidence"), 0.68),
+            block_type=block_type,
+            language=str(raw.get("language") or raw.get("lang") or "visual"),
         )
         bbox = _valid_bbox(raw.get("bbox"))
         if bbox is not None:
@@ -320,7 +450,12 @@ class TesseractOcrProvider:
         except ImportError as exc:
             raise RuntimeError("Install backend optional dependency group: pip install -e '.[ocr]'") from exc
 
-        text = pytesseract.image_to_string(Image.open(file_path), lang="eng+nep")
+        image = Image.open(file_path)
+        data = pytesseract.image_to_data(image, lang="eng+nep", output_type=pytesseract.Output.DICT)
+        observations = observations_from_tesseract_data(data, page_width=image.width, page_height=image.height)
+        if observations:
+            return observations
+        text = pytesseract.image_to_string(image, lang="eng+nep")
         return [OcrObservation(field_key="raw_text", text=text.strip(), confidence=0.50)]
 
 
@@ -358,16 +493,25 @@ class GemmaVisionOcrProvider:
             "You are LipiOCR OCR/ICR for Nepal financial institution documents. "
             "Transcribe every visible line from the image, including printed Nepali Devanagari, English, numbers, "
             "and handwritten Nepali or English. Preserve original script and numerals. "
+            "Do not paraphrase visible text, rewrite it as sentences, or infer values that are not visible. "
             "Do not skip uncertain handwriting; return it with lower confidence. "
             "Mark handwritten lines with script='handwriting' and printed lines with script='printed'. "
-            "Also extract structured field candidates for financial onboarding and KYC forms. "
+            "Also extract structured field candidates for financial onboarding and KYC forms, and asset regions for "
+            "photos, fingerprints/thumbprints, signatures, stamps/seals, chips, QR codes, and barcodes. "
             "Use canonical keys when visible: full_name, full_name_np, full_name_en, applicant_name, applicant_name_np, "
-            "applicant_name_en, bank_name, dp_id, client_id, boid, account_number, amount, applied_units, "
-            "mobile, email, citizenship_number, dob, issue_date, expiry_date, address, father_name, grandfather_name. "
+            "applicant_name_en, bank_name, dp_id, client_id, boid, account_number, amount, applied_units, mobile, email, "
+            "citizenship_number, dob, dob_bs, dob_ad, issue_date, issue_date_bs, issue_date_ad, gender, citizenship_type, "
+            "birth_place, permanent_address, father_name, father_name_np, mother_name, mother_name_np, spouse_name, "
+            "issuing_office, issuing_authority_name, issuing_authority_designation, grandfather_name. "
+            "For Nepali citizenship, capture both front and back/English summary fields when visible, including "
+            "birth-place and permanent-address components, parent names, citizenship kind, copy type, issuing office, "
+            "issuing officer, photo, holder signature, and left/right thumbprints. "
             "For C-ASBA/IPO forms, read the filled handwriting inside boxes and rows, not only the printed labels. "
+            "All bbox coordinates must use [left, top, right, bottom] pixel order. "
             "Return JSON only with schema: "
             "{document_type,lines:[{text,confidence,script,language,bbox}],"
-            "fields:[{key,value,confidence,script,language,bbox}]}. "
+            "fields:[{key,value,confidence,script,language,bbox}],"
+            "asset_regions:[{type,label,confidence,bbox}]}. "
             f"Expected document type: {document_type.value}."
         )
         payload = {
@@ -385,7 +529,7 @@ class GemmaVisionOcrProvider:
                 }
             ],
             "temperature": 0,
-            "max_tokens": max(self.settings.gemma_max_tokens, 6000),
+            "max_tokens": max(500, min(self.settings.gemma_max_tokens, 3000)),
         }
         if self.settings.gemma_require_json:
             payload["response_format"] = {"type": "json_object"}
@@ -396,7 +540,7 @@ class GemmaVisionOcrProvider:
         )
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
-        observations = parse_gemma_ocr_content(content)
+        observations = normalize_gemma_observation_bboxes(parse_gemma_ocr_content(content))
         if not observations:
             raise RuntimeError("Gemma vision OCR returned no text lines")
         return observations

@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.models import ExtractedField, FinancialDocument, OcrBlock, OcrPage, ValidationStatus
+from app.core.config import get_settings
 from app.services.address_evidence_store import AddressEvidenceRecord, AddressEvidenceStore
 from app.services.address_intelligence import is_address_field_key, suggest_address_corrections
 from app.services.document_intelligence import analyze_document, apply_document_intelligence
@@ -136,6 +137,55 @@ def test_document_intelligence_exposes_address_candidates():
     assert candidate["target_field"] in {"permanent_address", "permanent_address_en", "address_en", "address"}
     assert candidate["structured"]["district"] == "Kathmandu"
     assert "address_evidence_store" in candidate["sources"]
+
+
+def test_document_intelligence_uses_request_tenant_for_private_address_evidence(tmp_path: Path, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "address_evidence_path", str(tmp_path / "address_evidence.json"))
+    store = AddressEvidenceStore(path=settings.address_evidence_path)
+    store.upsert(
+        AddressEvidenceRecord(
+            id="addr_demo_private_area",
+            tenant_id="demo-institution",
+            visibility="tenant_private",
+            kind="area_or_tole",
+            district_name="Kathmandu",
+            local_level_name="Kathmandu Metropolitan City",
+            ward="26",
+            name_en="Private Demo Area",
+            aliases_en=["Private Demo Alias"],
+        )
+    )
+    document = FinancialDocument(
+        filename="tenant-address.txt",
+        pages=[
+            OcrPage(
+                page_number=1,
+                width=1000,
+                height=700,
+                blocks=[
+                    OcrBlock(
+                        text="Permanent Address: Kathmandu Metropolitan City ward 26 Private Demo Alias",
+                        bbox=[80, 120, 760, 160],
+                        confidence=0.74,
+                        block_type="field_candidate",
+                    )
+                ],
+            )
+        ],
+    )
+
+    other_tenant_analysis = analyze_document(document, tenant_id="other-bank")
+    demo_tenant_analysis = analyze_document(document, tenant_id="demo-institution")
+
+    assert not any(
+        candidate.get("structured", {}).get("area_or_tole") == "Private Demo Area"
+        for candidate in other_tenant_analysis["address_candidates"]
+    )
+    assert any(
+        candidate.get("structured", {}).get("area_or_tole") == "Private Demo Area"
+        for candidate in demo_tenant_analysis["address_candidates"]
+    )
 
 
 def test_apply_document_intelligence_attaches_address_candidates_to_review_field():

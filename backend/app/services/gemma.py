@@ -14,9 +14,54 @@ from app.models import (
     OcrPage,
     ValidationFinding,
 )
+from app.services.ocr import normalize_bbox_orientation
 
 
 JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
+
+DOCUMENT_TYPE_ALIASES = {
+    "nepali citizenship certificate": DocumentType.citizenship,
+    "nepal citizenship certificate": DocumentType.citizenship,
+    "citizenship certificate": DocumentType.citizenship,
+    "nagarikta": DocumentType.citizenship,
+    "नागरिकता": DocumentType.citizenship,
+    "national identity card": DocumentType.national_id,
+    "national id card": DocumentType.national_id,
+    "passport": DocumentType.passport,
+    "driving licence": DocumentType.driving_license,
+    "driving license": DocumentType.driving_license,
+    "asba": DocumentType.asba_application,
+    "c-asba": DocumentType.asba_application,
+    "ipo": DocumentType.ipo_application,
+}
+
+FIELD_KEY_ALIASES = {
+    "citizen_id": "citizenship_number",
+    "citizenship_id": "citizenship_number",
+    "citizenship_no": "citizenship_number",
+    "citizenship_certificate_no": "citizenship_number",
+    "citizenship_certificate_number": "citizenship_number",
+    "na_pr_no": "citizenship_number",
+    "date_of_birth": "dob",
+    "birth_date": "dob",
+    "date_of_birth_bs": "dob_bs",
+    "birth_date_bs": "dob_bs",
+    "date_of_birth_ad": "dob_ad",
+    "birth_date_ad": "dob_ad",
+    "date_of_issue": "issue_date",
+    "issue_date_bs": "issue_date_bs",
+    "date_of_issue_bs": "issue_date_bs",
+    "date_of_issue_ad": "issue_date_ad",
+    "issuing_authority": "issuing_office",
+    "issuing_authority_office": "issuing_office",
+    "issuing_office_name": "issuing_office",
+    "issuing_officer": "issuing_authority_name",
+    "issuing_officer_name": "issuing_authority_name",
+    "officer_name": "issuing_authority_name",
+    "officer_designation": "issuing_authority_designation",
+    "citizenship_kind": "citizenship_type",
+    "citizenship_category": "citizenship_type",
+}
 
 
 class GemmaExtractionResult(BaseModel):
@@ -38,14 +83,14 @@ def _clean_json_content(content: str) -> str:
 
 
 def _field_from_gemma(raw: Dict[str, Any]) -> ExtractedField:
-    bbox = raw.get("bbox")
+    bbox = _normalized_field_bbox(raw)
     evidence = EvidenceRef(
         source_page=int(raw.get("source_page") or 1),
-        bbox=bbox if isinstance(bbox, list) else None,
+        bbox=bbox,
         evidence_text=str(raw.get("evidence_text") or raw.get("value") or ""),
     )
     return ExtractedField(
-        key=str(raw.get("key") or raw.get("field") or "unknown"),
+        key=_normalize_field_key(raw.get("key") or raw.get("field") or "unknown"),
         label=str(raw.get("label") or raw.get("key") or "Unknown"),
         value=str(raw.get("value") or ""),
         confidence=round(float(raw.get("confidence") or 0.0), 2),
@@ -57,9 +102,23 @@ def _field_from_gemma(raw: Dict[str, Any]) -> ExtractedField:
     )
 
 
+def _normalized_field_bbox(raw: Dict[str, Any]) -> Optional[List[int]]:
+    bbox = raw.get("bbox")
+    if not isinstance(bbox, list) or len(bbox) != 4:
+        return None
+    try:
+        coordinates = [int(value) for value in bbox]
+    except (TypeError, ValueError):
+        return None
+    return normalize_bbox_orientation(
+        coordinates,
+        raw.get("evidence_text") or raw.get("value") or raw.get("label") or raw.get("key") or "",
+    )
+
+
 def parse_gemma_extraction(content: str) -> GemmaExtractionResult:
     payload = json.loads(_clean_json_content(content))
-    document_type = DocumentType(payload.get("document_type") or "unknown")
+    document_type = _normalize_document_type(payload.get("document_type"))
     fields = [_field_from_gemma(item) for item in payload.get("fields", [])]
     findings = [
         ValidationFinding(
@@ -76,6 +135,41 @@ def parse_gemma_extraction(content: str) -> GemmaExtractionResult:
         fields=fields,
         findings=findings,
     )
+
+
+def _normalize_token(value: object) -> str:
+    normalized = str(value or "").strip().lower()
+    normalized = re.sub(r"[\s./:-]+", "_", normalized)
+    normalized = re.sub(r"[^a-z0-9_\-\u0900-\u097F]+", "", normalized)
+    return normalized.strip("_")
+
+
+def _normalize_document_type(value: object) -> DocumentType:
+    if isinstance(value, DocumentType):
+        return value
+    raw = str(value or "unknown").strip()
+    try:
+        return DocumentType(raw)
+    except ValueError:
+        pass
+
+    normalized = raw.lower().replace("_", " ").strip()
+    normalized = re.sub(r"\s+", " ", normalized)
+    if normalized in DOCUMENT_TYPE_ALIASES:
+        return DOCUMENT_TYPE_ALIASES[normalized]
+    for signal, document_type in DOCUMENT_TYPE_ALIASES.items():
+        if signal in normalized:
+            return document_type
+    return DocumentType.unknown
+
+
+def _normalize_field_key(value: object) -> str:
+    token = _normalize_token(value)
+    return FIELD_KEY_ALIASES.get(token, token or "unknown")
+
+
+def normalize_extraction_field_key(value: object) -> str:
+    return _normalize_field_key(value)
 
 
 def _pages_as_text(pages: List[OcrPage]) -> str:
@@ -103,6 +197,7 @@ def build_extraction_messages(
         "National ID, passport, driving license, account opening forms, IPO applications, "
         "C-ASBA bank forms, cheque, bank statement, company registration, "
         "board resolution, tax clearance, nominee, signature, photo, and branch documents. "
+        "All bbox coordinates must use [left, top, right, bottom] pixel order. "
         "JSON schema: {document_type, summary, fields:[{key,label,value,confidence,required,source_page,evidence_text,bbox}], "
         "findings:[{severity,code,message,field_key}]}."
     )

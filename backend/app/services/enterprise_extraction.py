@@ -16,7 +16,7 @@ from app.models import (
 )
 from app.services.calendar_intelligence import apply_calendar_intelligence
 from app.services.document_intelligence import apply_document_intelligence
-from app.services.gemma import GemmaExtractionResult, GemmaReasoningClient
+from app.services.gemma import GemmaExtractionResult, GemmaReasoningClient, normalize_extraction_field_key
 from app.services.validation import validate_field
 
 
@@ -58,7 +58,7 @@ GENERIC_FIELD_ALIASES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 )
 
 
-def _pages_from_text_lines(lines: List[Sequence[object]], filename: str) -> List[OcrPage]:
+def _pages_from_text_lines(lines: List[Sequence[object]], filename: str, *, width: int = 1000, height: int = 1400) -> List[OcrPage]:
     if not lines:
         lines = [(f"Uploaded scanned document: {filename}. Full OCR pending for binary page image.", 0.40)]
 
@@ -81,7 +81,7 @@ def _pages_from_text_lines(lines: List[Sequence[object]], filename: str) -> List
         )
 
     confidence = round(sum(block.confidence for block in blocks) / len(blocks), 2)
-    return [OcrPage(page_number=1, width=1000, height=1400, blocks=blocks, ocr_confidence=confidence)]
+    return [OcrPage(page_number=1, width=width, height=height, blocks=blocks, ocr_confidence=confidence)]
 
 
 def build_pages_from_upload(
@@ -102,26 +102,39 @@ def build_pages_from_upload(
         return _pages_from_text_lines(lines, filename)
 
     if ocr_provider is not None and source_path is not None:
-        observations = ocr_provider.read(source_path, document_type)
+        try:
+            observations = ocr_provider.read(source_path, document_type)
+        except Exception as exc:
+            provider_name = getattr(ocr_provider, "name", "configured")
+            return _pages_from_text_lines(
+                [(f"OCR provider {provider_name} unavailable: {exc}", 0.10, "text", "mixed")],
+                filename,
+            )
+        page_width = 1000
+        page_height = 1400
         lines = []
         for observation in observations:
             text_value = str(observation.get("text") or "").strip()
             if not text_value:
                 continue
+            page_width = int(observation.get("page_width") or page_width)
+            page_height = int(observation.get("page_height") or page_height)
             field_key = str(observation.get("field_key") or "").strip()
             block_type = str(observation.get("block_type") or "text")
             language = str(observation.get("language") or "mixed")
             bbox = observation.get("bbox")
             for raw_line in text_value.splitlines() or [text_value]:
                 line_value = raw_line.strip()
+                line_block_type = block_type
                 if not line_value:
                     continue
                 if field_key and field_key != "raw_text":
                     label = field_key.replace("_", " ").title()
                     line_value = f"{label}: {line_value}"
-                lines.append((line_value, float(observation.get("confidence") or 0.50), block_type, language, bbox))
+                    line_block_type = "field_candidate"
+                lines.append((line_value, float(observation.get("confidence") or 0.50), line_block_type, language, bbox))
         if lines:
-            return _pages_from_text_lines(lines, filename)
+            return _pages_from_text_lines(lines, filename, width=page_width, height=page_height)
 
     return _pages_from_text_lines([], filename)
 
@@ -134,6 +147,57 @@ def _first_bbox(pages: List[OcrPage]) -> List[int]:
     if pages and pages[0].blocks:
         return pages[0].blocks[0].bbox
     return [80, 100, 920, 134]
+
+
+def _field_language(value: str) -> str:
+    if re.search(r"[\u0900-\u097F]", value):
+        return "nep"
+    if re.search(r"[A-Za-z]", value):
+        return "eng"
+    return "mixed"
+
+
+def _normalize_identifier_value(key: str, value: str) -> str:
+    if key in {
+        "citizenship_number",
+        "national_id_number",
+        "passport_number",
+        "license_number",
+        "account_number",
+        "boid",
+        "dp_id",
+        "client_id",
+    }:
+        return value.translate(DEVANAGARI_DIGIT_TRANSLATION).strip()
+    return value
+
+
+def _index_result_fields_into_pages(document: FinancialDocument, fields: List[ExtractedField]) -> None:
+    if not fields:
+        return
+    if not document.pages:
+        document.pages = [OcrPage(page_number=1, width=1000, height=1400, blocks=[], ocr_confidence=0.0)]
+
+    first_page = document.pages[0]
+    for index, field in enumerate(fields, start=1):
+        field.key = normalize_extraction_field_key(field.key)
+        field.value = _normalize_identifier_value(field.key, field.value)
+        if not field.value.strip() or field.source in {"full_page_ocr", "handwriting_ocr"}:
+            continue
+        evidence_bbox = field.bbox or field.evidence.bbox
+        bbox = evidence_bbox or [80, 160 + index * 28, 920, 186 + index * 28]
+        label = field.label or field.key.replace("_", " ").title()
+        first_page.blocks.append(
+            OcrBlock(
+                text=f"{label}: {field.value}",
+                bbox=bbox,
+                confidence=field.confidence or 0.62,
+                block_type="field_candidate",
+                language=_field_language(field.value),
+            )
+        )
+    if first_page.blocks:
+        first_page.ocr_confidence = round(sum(block.confidence for block in first_page.blocks) / len(first_page.blocks), 2)
 
 
 def _clean_value(value: str) -> str:
@@ -646,6 +710,7 @@ async def process_enterprise_document(
     gemma_client: GemmaReasoningClient,
     source_path: Optional[Path] = None,
     ocr_provider=None,
+    tenant_id: Optional[str] = None,
 ) -> tuple[FinancialDocument, List[ExtractedField], List[ValidationFinding]]:
     document = FinancialDocument(
         filename=filename,
@@ -690,6 +755,8 @@ async def process_enterprise_document(
             document=document,
         )
 
+    _index_result_fields_into_pages(document, result.fields)
+
     if not any(field.source in {"full_page_ocr", "handwriting_ocr"} for field in result.fields):
         _append_full_page_ocr_fields(fields=result.fields, pages=document.pages, document_id=document.id)
 
@@ -708,7 +775,7 @@ async def process_enterprise_document(
         if field.evidence.bbox and not field.bbox:
             field.bbox = field.evidence.bbox
 
-    apply_document_intelligence(document, result.fields)
+    apply_document_intelligence(document, result.fields, tenant_id=tenant_id)
     apply_calendar_intelligence(result.fields, document_id=document.id)
 
     for finding in result.findings:

@@ -7,7 +7,9 @@ LipiOCR is not positioned as "OCR only." The core product is LipiCore-assisted d
 - OCR and ICR evidence capture.
 - Bilingual Nepali/English field pairing.
 - BS/AD date normalization.
+- Nepal location registry normalization for province, district, municipality/gaunpalika, legacy VDC wording, and ward checks.
 - Address intelligence RAG for Nepal KYC: administrative registry matching, road/tole evidence, fuzzy address suggestions, and reviewer-approved learning.
+- Nepali name lexicon correction candidates for reviewer-safe name repair.
 - Entity reconciliation across documents.
 - Confidence repair with audit reasons.
 - Reviewer-safe correction before export.
@@ -142,6 +144,8 @@ curl -i -X POST http://localhost:8010/api/auth/session \
   -H 'Content-Type: application/json' \
   -d '{"username":"maker.one","role":"maker","tenant_id":"demo-institution"}'
 ```
+
+Use `super_admin` only for platform-level operations such as revising permanent Nepal identity templates. Tenant `admin` users can manage custom templates but cannot overwrite permanent ID formats.
 
 Real deployment keys must be generated and stored outside Git:
 

@@ -91,6 +91,45 @@ class EvidenceRef(BaseModel):
     image_crop_uri: Optional[str] = None
 
 
+class DocumentAsset(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("asset"))
+    asset_type: str
+    label: str
+    page_number: int = 1
+    bbox: Optional[List[int]] = None
+    confidence: float = 0.0
+    source: str = "layout_signal"
+    image_crop_uri: Optional[str] = None
+    review_status: ReviewStatus = ReviewStatus.needs_review
+
+
+class DocumentSection(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("section"))
+    side: str = "unknown"
+    label: str = "Unknown Section"
+    page_number: int = 1
+    bbox: Optional[List[int]] = None
+    confidence: float = 0.0
+    source: str = "document_side_detection"
+    signals: List[str] = Field(default_factory=list)
+
+
+class EvidenceLedgerEntry(BaseModel):
+    entry_id: str = Field(default_factory=lambda: new_id("ledger"))
+    page_number: int
+    block_index: int
+    text: str
+    normalized_text: str = ""
+    language: str = "mixed"
+    block_type: str = "text"
+    confidence: float = 0.0
+    bbox: Optional[List[int]] = None
+    mapped_field_key: Optional[str] = None
+    asset_type: Optional[str] = None
+    section_id: Optional[str] = None
+    section_side: Optional[str] = None
+
+
 class OcrBlock(BaseModel):
     text: str
     bbox: List[int]
@@ -127,6 +166,7 @@ class ExtractedField(BaseModel):
     source_field_used: Optional[str] = None
     correction_confidence: Optional[float] = None
     audit_reason: Optional[str] = None
+    correction_candidates: List[Dict[str, object]] = Field(default_factory=list)
 
 
 class ValidationFinding(BaseModel):
@@ -146,6 +186,11 @@ class FinancialDocument(BaseModel):
     page_count: int = 0
     pages: List[OcrPage] = Field(default_factory=list)
     summary: str = ""
+    document_variant: Optional[str] = None
+    assets: List[DocumentAsset] = Field(default_factory=list)
+    document_sections: List[DocumentSection] = Field(default_factory=list)
+    evidence_ledger: List[EvidenceLedgerEntry] = Field(default_factory=list)
+    intelligence: Dict[str, object] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -308,6 +353,11 @@ class DocumentRecord(BaseModel):
     pages: List[OcrPage] = Field(default_factory=list)
     fields: List[ExtractedField]
     summary: str = ""
+    document_variant: Optional[str] = None
+    assets: List[DocumentAsset] = Field(default_factory=list)
+    document_sections: List[DocumentSection] = Field(default_factory=list)
+    evidence_ledger: List[EvidenceLedgerEntry] = Field(default_factory=list)
+    intelligence: Dict[str, object] = Field(default_factory=dict)
     validation_findings: List[ValidationFinding] = Field(default_factory=list)
     audit_events: List[AuditEvent] = Field(default_factory=list)
     version_history: List[DocumentVersion] = Field(default_factory=list)

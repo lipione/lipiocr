@@ -345,6 +345,7 @@ async def _analyze_standalone_upload(
     contents: bytes,
     declared_document_type: DocumentType,
     stored_path: Path,
+    tenant_id: str,
     existing_document_id: Optional[str] = None,
 ):
     financial_document, fields, findings = await process_enterprise_document(
@@ -355,6 +356,7 @@ async def _analyze_standalone_upload(
         gemma_client=_gemma_client(),
         source_path=stored_path,
         ocr_provider=ocr_provider(),
+        tenant_id=tenant_id,
     )
     if existing_document_id:
         _retarget_document_outputs(existing_document_id, financial_document, fields, findings)
@@ -386,6 +388,7 @@ async def _analyze_case_upload(
         gemma_client=_gemma_client(),
         source_path=stored_path,
         ocr_provider=ocr_provider(),
+        tenant_id=case.institution_id,
     )
     if existing_document_id:
         _retarget_document_outputs(existing_document_id, financial_document, fields, findings)
@@ -544,7 +547,7 @@ async def create_template_draft_upload(
 ):
     from app.services.template_profiles import build_template_pages, create_template_draft
 
-    require_permission(settings, http_request, "manage_templates")
+    principal = require_permission(settings, http_request, "manage_templates")
     declared_type = DocumentType(document_type)
     template_pages = []
     extracted_fields = []
@@ -583,6 +586,7 @@ async def create_template_draft_upload(
                 gemma_client=_gemma_client(),
                 source_path=upload_page.stored_path,
                 ocr_provider=ocr_provider(),
+                tenant_id=principal.tenant_id,
             )
             del findings
             if _is_previewable_image(upload_page.stored_path.name):
@@ -771,6 +775,18 @@ def _address_evidence_record_for_tenant(store, record_id: str, *, tenant_id: str
     return record
 
 
+def _address_evidence_error(exc: ValueError) -> HTTPException:
+    detail = str(exc)
+    status_code = (
+        400
+        if detail.startswith("Unsupported address evidence")
+        or detail.startswith("limit must")
+        or detail.startswith("confidence_weight must")
+        else 403
+    )
+    return HTTPException(status_code=status_code, detail=detail)
+
+
 @app.get("/api/reference/address-evidence")
 def address_evidence_reference(
     http_request: Request,
@@ -785,16 +801,20 @@ def address_evidence_reference(
     principal = resolve_principal(settings, http_request)
     require_permission(settings, http_request, "view_case")
     store = load_address_evidence_store()
-    return {
-        "query": q,
-        "results": store.search(
+    try:
+        results = store.search(
             q,
             tenant_id=principal.tenant_id,
             district=district,
             local_level=local_level,
             ward=ward,
             limit=limit,
-        ),
+        )
+    except ValueError as exc:
+        raise _address_evidence_error(exc) from exc
+    return {
+        "query": q,
+        "results": results,
     }
 
 
@@ -823,13 +843,13 @@ def create_address_evidence_reference(http_request: Request, payload: Dict[str, 
 
     principal = require_permission(settings, http_request, "manage_templates")
     store = load_address_evidence_store()
-    record = AddressEvidenceRecord.from_payload(
-        _address_evidence_record_payload(payload, tenant_id=principal.tenant_id)
-    )
     try:
+        record = AddressEvidenceRecord.from_payload(
+            _address_evidence_record_payload(payload, tenant_id=principal.tenant_id)
+        )
         return {"record": store.upsert(record)}
     except ValueError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _address_evidence_error(exc) from exc
 
 
 @app.post("/api/reference/address-evidence/import")
@@ -842,11 +862,13 @@ def import_address_evidence_reference(http_request: Request, payload: Dict[str, 
     for item in list(payload.get("records") or []):
         if not isinstance(item, dict):
             raise HTTPException(status_code=400, detail="records must contain objects")
-        record = AddressEvidenceRecord.from_payload(_address_evidence_record_payload(item, tenant_id=principal.tenant_id))
         try:
+            record = AddressEvidenceRecord.from_payload(
+                _address_evidence_record_payload(item, tenant_id=principal.tenant_id)
+            )
             records.append(store.upsert(record))
         except ValueError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+            raise _address_evidence_error(exc) from exc
     return {"records": records, "count": len(records)}
 
 
@@ -863,13 +885,13 @@ def update_address_evidence_reference(
     existing = _address_evidence_record_for_tenant(store, record_id, tenant_id=principal.tenant_id)
     record_payload = existing.model_dump()
     record_payload.update(payload)
-    record = AddressEvidenceRecord.from_payload(
-        _address_evidence_record_payload(record_payload, tenant_id=existing.tenant_id, record_id=record_id)
-    )
     try:
+        record = AddressEvidenceRecord.from_payload(
+            _address_evidence_record_payload(record_payload, tenant_id=existing.tenant_id, record_id=record_id)
+        )
         return {"record": store.upsert(record)}
     except ValueError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _address_evidence_error(exc) from exc
 
 
 @app.delete("/api/reference/address-evidence/{record_id}")
@@ -882,7 +904,7 @@ def delete_address_evidence_reference(record_id: str, http_request: Request):
     try:
         result = store.delete(record_id, tenant_id=principal.tenant_id)
     except ValueError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise _address_evidence_error(exc) from exc
     if not result.get("deleted"):
         raise HTTPException(status_code=404, detail="Address evidence record not found")
     result["status"] = "disabled"
@@ -912,19 +934,24 @@ def record_accuracy_correction(http_request: Request, payload: Dict[str, object]
 
 @app.post("/api/cases", status_code=201)
 def create_case(http_request: Request, request: CaseCreateRequest):
-    require_permission(settings, http_request, "create_case")
+    principal = require_permission(settings, http_request, "create_case")
+    institution_id = (
+        request.institution_id
+        if can_manage_system_templates(principal) and request.institution_id
+        else principal.tenant_id
+    )
     case = KycCase(
         case_type=request.case_type,
         applicant_name=request.applicant_name,
-        institution_id=request.institution_id,
-        branch_code=request.branch_code,
+        institution_id=institution_id,
+        branch_code=request.branch_code or principal.branch_code,
         integration_ref=request.customer_ref,
         audit_events=[
             AuditEvent(
                 action="case_created",
                 actor="api",
                 note=f"Created {request.case_type.value} case",
-                metadata={"customer_ref": request.customer_ref},
+                metadata={"customer_ref": request.customer_ref, "tenant_id": institution_id},
             )
         ],
     )
@@ -1103,6 +1130,7 @@ async def upload_case_document(
                 "declared_document_type": declared_document_type.value,
                 "stored_path": stored_path.name,
                 "storage": storage_metadata,
+                "tenant_id": case.institution_id,
             },
         )
         repository.save_case(case)
@@ -1116,6 +1144,7 @@ async def upload_case_document(
         gemma_client=_gemma_client(),
         source_path=stored_path,
         ocr_provider=ocr_provider(),
+        tenant_id=case.institution_id,
     )
     if _is_previewable_image(stored_path.name):
         for page in document.pages:
@@ -1364,7 +1393,7 @@ async def upload_document(
     declared_document_type: Optional[DocumentType] = Form(None),
     file: UploadFile = File(...),
 ):
-    require_permission(settings, http_request, "upload_document")
+    principal = require_permission(settings, http_request, "upload_document")
     declared_type = declared_document_type or document_type or DocumentType.unknown
     stored_path = _stored_upload_path(file.filename)
     contents = await file.read()
@@ -1386,6 +1415,7 @@ async def upload_document(
                 "declared_document_type": declared_type.value,
                 "stored_path": stored_path.name,
                 "storage": storage_metadata,
+                "tenant_id": principal.tenant_id,
             },
         )
         return JSONResponse(status_code=202, content=_job_envelope(job))
@@ -1395,6 +1425,7 @@ async def upload_document(
         declared_document_type=declared_type,
         contents=contents,
         stored_path=stored_path,
+        tenant_id=principal.tenant_id,
     )
 
     document = DocumentRecord(
@@ -1450,7 +1481,7 @@ def get_document(document_id: str, http_request: Request):
 
 @app.post("/api/documents/{document_id}/reanalyze")
 async def reanalyze_document(document_id: str, http_request: Request):
-    require_permission(settings, http_request, "upload_document")
+    principal = require_permission(settings, http_request, "upload_document")
     document = repository.get(document_id)
     _ensure_document_version_history(document)
     stored_name = _stored_upload_name_from_document_record(document)
@@ -1465,6 +1496,7 @@ async def reanalyze_document(document_id: str, http_request: Request):
         contents=stored_path.read_bytes(),
         declared_document_type=document.declared_document_type,
         stored_path=stored_path,
+        tenant_id=principal.tenant_id,
         existing_document_id=document.id,
     )
 
@@ -1500,7 +1532,7 @@ async def replace_document(
     declared_document_type: Optional[DocumentType] = Form(None),
     file: UploadFile = File(...),
 ):
-    require_permission(settings, http_request, "upload_document")
+    principal = require_permission(settings, http_request, "upload_document")
     document = repository.get(document_id)
     _ensure_document_version_history(document)
     declared_type = declared_document_type or document_type or document.declared_document_type or DocumentType.unknown
@@ -1520,6 +1552,7 @@ async def replace_document(
         contents=contents,
         declared_document_type=declared_type,
         stored_path=stored_path,
+        tenant_id=principal.tenant_id,
         existing_document_id=document.id,
     )
 

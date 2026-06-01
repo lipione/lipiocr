@@ -46,6 +46,7 @@ Configuration is environment-variable driven. Do not commit real `.env` files.
 | `LIPIOCR_ALLOWED_UPLOAD_EXTENSIONS` | common images, PDF, text | Restrict alongside MIME types. |
 | `LIPIOCR_PREVIEW_TOKEN_SECRET` | derived fallback | Must be unique random secret in production. |
 | `LIPIOCR_PREVIEW_TOKEN_TTL_SECONDS` | `900` | Short TTL is safer. |
+| `LIPIOCR_NEPALI_NAME_LEXICON` | `storage/name-lexicon/nepali_name_lexicon.json` | Optional compact Nepali name lexicon generated from an approved local CSV. Used for reviewer-safe name correction suggestions. |
 | `LIPIOCR_ADDRESS_EVIDENCE_PATH` | `storage/address-evidence/address_evidence.json` | Local JSON store for tenant-approved address evidence. Use a mounted path for on-prem deployments. |
 | `LIPIOCR_TEMPLATE_STORE` | empty | Optional JSON store for runtime templates. |
 | `LIPIOCR_TEMPLATE_PROFILE_STORE` | empty | Optional JSON store for template profiles. |
@@ -91,10 +92,10 @@ Generate at least:
 ## Auth Key Format
 
 ```bash
-LIPIOCR_API_KEYS=<maker-key>:maker,<checker-key>:checker,<auditor-key>:auditor,<admin-key>:admin
+LIPIOCR_API_KEYS=<maker-key>:maker,<checker-key>:checker,<auditor-key>:auditor,<admin-key>:admin,<super-admin-key>:super_admin
 ```
 
-Never share production admin keys in chat, screenshots, tickets, or committed docs.
+Never share production admin or super-admin keys in chat, screenshots, tickets, or committed docs.
 
 ## Local Profiles
 

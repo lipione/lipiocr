@@ -135,7 +135,7 @@ openssl rand -hex 32
 Then configure:
 
 ```bash
-LIPIOCR_API_KEYS=<maker-key>:maker,<checker-key>:checker,<admin-key>:admin
+LIPIOCR_API_KEYS=<maker-key>:maker,<checker-key>:checker,<admin-key>:admin,<super-admin-key>:super_admin
 ```
 
 Roles:
@@ -143,7 +143,8 @@ Roles:
 - `maker`: create cases, upload documents, classify, validate, verify.
 - `checker`: review, approve/reject, export, hand off review links.
 - `auditor`: read audit and compliance posture.
-- `admin`: full access.
+- `admin`: tenant administration, integrations, custom templates, and operational controls.
+- `super_admin`: platform administration and permanent Nepal identity template revision.
 
 ## Tests And Verification
 
@@ -206,6 +207,17 @@ Then use:
 LIPIOCR_OCR_PROVIDER=tesseract make backend-dev
 LIPIOCR_OCR_PROVIDER=paddleocr make backend-dev
 ```
+
+## Nepali Name Lexicon
+
+The raw Nepali name dataset should stay outside Git. Build a compact local lexicon from an approved CSV:
+
+```bash
+cd backend
+.venv/bin/python scripts/build_nepali_name_lexicon.py /path/to/NepaliNameDatasetKaggle.csv
+```
+
+The generated file defaults to `backend/storage/name-lexicon/nepali_name_lexicon.json` and is ignored by Git. Override with `LIPIOCR_NEPALI_NAME_LEXICON` when deploying a tenant-approved lexicon path.
 
 ## Address Evidence Dataset
 

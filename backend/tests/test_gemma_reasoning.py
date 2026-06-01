@@ -42,6 +42,54 @@ def test_parse_gemma_extraction_removes_markdown_and_preserves_evidence():
     assert result.findings[0].code == "needs_review"
 
 
+def test_parse_gemma_extraction_normalizes_transposed_field_coordinates():
+    content = """{
+      "document_type": "ipo_application",
+      "summary": "IPO form",
+      "fields": [
+        {
+          "key": "full_name_en",
+          "label": "Full Name (English)",
+          "value": "ASHISH SINGH",
+          "confidence": 0.97,
+          "source_page": 1,
+          "evidence_text": "ASHISH SINGH",
+          "bbox": [490, 150, 505, 300]
+        }
+      ],
+      "findings": []
+    }"""
+
+    result = parse_gemma_extraction(content)
+
+    assert result.fields[0].bbox == [150, 490, 300, 505]
+    assert result.fields[0].evidence.bbox == [150, 490, 300, 505]
+
+
+def test_parse_gemma_extraction_normalizes_nepal_citizenship_type_and_field_keys():
+    content = """{
+      "document_type": "Nepali Citizenship Certificate",
+      "summary": "Citizenship front side",
+      "fields": [
+        {"key": "citizen_id", "label": "ना. प्र. नं.", "value": "२७-०१-७५-१२७५१", "confidence": 0.92},
+        {"key": "date_of_birth", "label": "जन्म मिति", "value": "साल: २०५९ महिना: ०७ गते: १७", "confidence": 0.86},
+        {"key": "permanent_address", "label": "स्थायी वासस्थान", "value": "जिल्ला: काठमाडौं", "confidence": 0.82},
+        {"key": "issuing_authority", "label": "जारी गर्ने कार्यालय", "value": "जिल्ला प्रशासन कार्यालय काठमाडौँ", "confidence": 0.90}
+      ],
+      "findings": []
+    }"""
+
+    result = parse_gemma_extraction(content)
+
+    assert result.document_type == DocumentType.citizenship
+    assert [field.key for field in result.fields] == [
+        "citizenship_number",
+        "dob",
+        "permanent_address",
+        "issuing_office",
+    ]
+
+
 def test_build_extraction_messages_targets_nepal_kyc_and_json_only():
     page = OcrPage(
         page_number=1,
@@ -66,4 +114,5 @@ def test_build_extraction_messages_targets_nepal_kyc_and_json_only():
     assert messages[0]["role"] == "system"
     assert "Nepal financial KYC" in messages[0]["content"]
     assert "JSON only" in messages[0]["content"]
+    assert "bbox coordinates must use [left, top, right, bottom]" in messages[0]["content"]
     assert "Name: Sita Sharma" in messages[1]["content"][0]["text"]

@@ -71,6 +71,32 @@ def test_admin_can_manage_templates():
     assert require_permission_for_principal(principal, "manage_templates") == principal
 
 
+def test_only_super_admin_can_manage_system_templates():
+    admin = Principal(
+        role="admin",
+        user_id="admin.one",
+        tenant_id="nmb-bank",
+        branch_code=None,
+        auth_method="session",
+    )
+    super_admin = Principal(
+        role="super_admin",
+        user_id="root.one",
+        tenant_id="nmb-bank",
+        branch_code=None,
+        auth_method="session",
+    )
+
+    try:
+        require_permission_for_principal(admin, "manage_system_templates")
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("tenant admin should not revise permanent system templates")
+
+    assert require_permission_for_principal(super_admin, "manage_system_templates") == super_admin
+
+
 def test_operator_session_can_access_cases():
     original_enabled = settings.api_auth_enabled
     try:
@@ -85,6 +111,49 @@ def test_operator_session_can_access_cases():
         assert login.status_code == 201
         assert login.json()["principal"]["tenant_id"] == "nmb-bank"
         assert client.get("/api/cases").status_code == 200
+    finally:
+        settings.api_auth_enabled = original_enabled
+
+
+def test_operator_session_binds_created_case_to_session_tenant():
+    original_enabled = settings.api_auth_enabled
+    try:
+        settings.api_auth_enabled = True
+        client = TestClient(app)
+
+        login = client.post(
+            "/api/auth/session",
+            json={"username": "maker.other", "role": "maker", "tenant_id": "other-bank"},
+        )
+        create = client.post(
+            "/api/cases",
+            json={
+                "case_type": "individual_kyc",
+                "applicant_name": "Tenant Bound Customer",
+                "institution_id": "demo-institution",
+            },
+        )
+
+        assert login.status_code == 201
+        assert create.status_code == 201
+        assert create.json()["institution_id"] == "other-bank"
+    finally:
+        settings.api_auth_enabled = original_enabled
+
+
+def test_super_admin_operator_session_is_supported():
+    original_enabled = settings.api_auth_enabled
+    try:
+        settings.api_auth_enabled = True
+        client = TestClient(app)
+
+        login = client.post(
+            "/api/auth/session",
+            json={"username": "root.one", "role": "super_admin", "tenant_id": "nmb-bank"},
+        )
+
+        assert login.status_code == 201
+        assert login.json()["principal"]["role"] == "super_admin"
     finally:
         settings.api_auth_enabled = original_enabled
 

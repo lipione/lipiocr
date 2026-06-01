@@ -6,7 +6,7 @@ from typing import Iterable
 
 from app.models import CaseStatus, KycCase
 from app.services.integrations import list_integration_profiles
-from app.services.templates import list_templates, list_validation_rules
+from app.services.templates import is_system_template, list_templates, list_validation_rules, template_source, template_status
 
 
 def _component(key: str, label: str, status: str, detail: str, next_step: str) -> dict[str, object]:
@@ -247,9 +247,11 @@ def build_template_studio() -> dict[str, object]:
                 "name": template.name,
                 "field_count": len(template.fields),
                 "required_fields": [field.key for field in template.fields if field.required],
-                "status": "configured",
+                "status": template_status(template.document_type),
                 "mode": "template_coordinates",
                 "validation_rule_count": rule_count,
+                "source": template_source(template.document_type),
+                "locked": is_system_template(template.document_type),
             }
         )
 

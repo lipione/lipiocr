@@ -79,11 +79,24 @@ def build_rbac_matrix() -> dict[str, object]:
                     "view_security_posture",
                 ],
             },
+            {
+                "key": "super_admin",
+                "name": "Super Admin",
+                "permissions": [
+                    "manage_tenants",
+                    "manage_system_templates",
+                    "manage_integrations",
+                    "manage_retention",
+                    "view_security_posture",
+                    "break_glass_audit",
+                ],
+            },
         ],
         "segregation_rules": [
             "Maker cannot approve the same case they created",
             "Checker approval is required before CBS/LOS export",
             "Auditors have read-only access",
+            "Only Super Admin can revise permanent Nepal identity templates",
         ],
     }
 

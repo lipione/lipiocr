@@ -19,7 +19,12 @@ from app.models import (
     TemplateProfileField,
     TemplateProfilePage,
 )
-from app.services.template_intelligence import infer_template_document_type, score_template_quality, suggest_label_fields
+from app.services.template_intelligence import (
+    infer_template_document_type,
+    score_template_quality,
+    suggest_label_fields,
+    suggest_preset_fields,
+)
 from app.services.templates import upsert_template
 
 
@@ -157,24 +162,40 @@ def create_template_draft(
     extracted_fields: List[ExtractedField],
 ) -> TemplateDraft:
     _load()
+    detected_type, type_confidence, type_reason = infer_template_document_type(pages, document_type)
     fields_by_identity: dict[tuple[str, int], TemplateProfileField] = {}
-    for field in extracted_fields:
-        if field.key.startswith("ocr_line_") or field.source in {"full_page_ocr", "handwriting_ocr"}:
-            continue
-        page_number = field.evidence.source_page or 1
-        identity = (field.key, page_number)
-        if identity in fields_by_identity:
-            continue
-        fields_by_identity[identity] = _field_from_extraction(field, page_number)
-
-    for field in suggest_label_fields(pages):
+    label_fields = suggest_label_fields(pages)
+    for field in label_fields:
         identity = (field.key, field.page_number)
         previous = fields_by_identity.get(identity)
         if previous is not None and previous.confidence > field.confidence:
             continue
         fields_by_identity[identity] = field
 
-    detected_type, type_confidence, type_reason = infer_template_document_type(pages, document_type)
+    preset_fields = suggest_preset_fields(pages, detected_type)
+    pages_by_number = {page.page_number: page for page in pages}
+    for field in preset_fields:
+        identity = (field.key, field.page_number)
+        previous = fields_by_identity.get(identity)
+        page = pages_by_number.get(field.page_number)
+        if (
+            previous is not None
+            and previous.confidence >= field.confidence
+            and not _is_synthetic_wide_label_field(previous, page)
+        ):
+            continue
+        fields_by_identity[identity] = field
+
+    if not fields_by_identity:
+        for field in extracted_fields:
+            if field.key.startswith("ocr_line_") or field.source in {"full_page_ocr", "handwriting_ocr"}:
+                continue
+            page_number = field.evidence.source_page or 1
+            identity = (field.key, page_number)
+            if identity in fields_by_identity:
+                continue
+            fields_by_identity[identity] = _field_from_extraction(field, page_number)
+
     fields = sorted(fields_by_identity.values(), key=lambda item: (item.page_number, item.bbox[1], item.bbox[0], item.key))
     quality_score, quality_checks = score_template_quality(fields, pages)
     draft = TemplateDraft(
@@ -200,6 +221,18 @@ def get_template_draft(draft_id: str) -> TemplateDraft:
     return draft
 
 
+def _is_synthetic_wide_label_field(field: TemplateProfileField, page: Optional[TemplateProfilePage]) -> bool:
+    if page is None or field.detection_source != "label_intelligence" or len(field.bbox) < 4:
+        return False
+    if (
+        not page.image_uri
+        and (page.filename.lower().endswith(".txt") or bool(page.stored_name and page.stored_name.lower().endswith(".txt")))
+    ):
+        return False
+    width = max(0, field.bbox[2] - field.bbox[0])
+    return width >= page.width * 0.70
+
+
 def update_template_draft(draft_id: str, update: TemplateDraftUpdate) -> TemplateDraft:
     draft = get_template_draft(draft_id)
     if update.name is not None:
@@ -215,7 +248,13 @@ def update_template_draft(draft_id: str, update: TemplateDraftUpdate) -> Templat
     return draft
 
 
-def publish_template_draft(draft_id: str, *, tenant_id: str = "demo-institution", actor: str = "system") -> tuple[TemplateProfile, dict[str, object]]:
+def publish_template_draft(
+    draft_id: str,
+    *,
+    tenant_id: str = "demo-institution",
+    actor: str = "system",
+    allow_system_override: bool = False,
+) -> tuple[TemplateProfile, dict[str, object]]:
     draft = get_template_draft(draft_id)
     profile = TemplateProfile(
         name=draft.name,
@@ -246,6 +285,7 @@ def publish_template_draft(draft_id: str, *, tenant_id: str = "demo-institution"
             for field in profile.fields
             if field.validation_rule or field.type
         ],
+        allow_system_override=allow_system_override,
     )
     _persist()
     return profile, template_result

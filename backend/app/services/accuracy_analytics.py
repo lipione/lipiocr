@@ -7,6 +7,7 @@ from typing import Dict, Iterable
 from app.accuracy.dataset import load_active_benchmark_dataset
 from app.accuracy.report import build_benchmark_report, dataset_from_cases
 from app.models import AuditEvent, KycCase
+from app.services.document_intelligence import build_correction_memory
 
 
 def record_correction(case: KycCase, payload: Dict[str, object]) -> Dict[str, object]:
@@ -18,6 +19,8 @@ def record_correction(case: KycCase, payload: Dict[str, object]) -> Dict[str, ob
         "new_value": str(payload.get("new_value") or ""),
         "corrected_by": str(payload.get("corrected_by") or "reviewer"),
         "document_type": str(payload.get("document_type") or "unknown"),
+        "document_variant": str(payload.get("document_variant") or f"{payload.get('document_type') or 'unknown'}_unclassified_variant"),
+        "block_type": str(payload.get("block_type") or ""),
         "created_at": datetime.utcnow().isoformat() + "Z",
     }
     for field in case.extracted_fields:
@@ -96,4 +99,5 @@ def build_accuracy_analytics(cases: Iterable[KycCase]) -> Dict[str, object]:
             for field_key in sorted(field_accuracy)
         ],
         "recent_corrections": corrections[-10:],
+        "correction_memory": build_correction_memory(cases_list),
     }

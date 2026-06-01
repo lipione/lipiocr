@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "source": "development_seed",
+    "description": "Small built-in Nepali name seed. Production deployments should build a compact lexicon from an approved dataset."
+  },
+  "names": [
+    {"name_np": "राजेश कार्की", "count": 50},
+    {"name_np": "सीता शर्मा", "count": 50},
+    {"name_np": "किरण लामा", "count": 50},
+    {"name_np": "रुद्रमान इसुवा", "count": 40},
+    {"name_np": "जेश घले", "count": 40},
+    {"name_np": "प्रसाद घले", "count": 40},
+    {"name_np": "अनिता शेर्पा", "count": 40},
+    {"name_np": "अनिल गुरुङ", "count": 40},
+    {"name_np": "अंकित कार्की", "count": 35},
+    {"name_np": "रियाना थापा", "count": 35}
+  ]
+}

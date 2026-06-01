@@ -83,6 +83,67 @@ def test_store_upserts_and_persists_reviewer_approved_evidence(tmp_path: Path):
     assert reloaded.search("Tokha Rd", tenant_id="demo-institution")[0]["name_en"] == "Tokha Road"
 
 
+def test_stale_store_instances_do_not_drop_previous_records(tmp_path: Path):
+    path = tmp_path / "address_evidence.json"
+    first_store = AddressEvidenceStore(path=path, seed_records=[])
+    stale_second_store = AddressEvidenceStore(path=path, seed_records=[])
+
+    first_store.upsert(
+        AddressEvidenceRecord(
+            id="addr_first",
+            tenant_id="demo-institution",
+            visibility="tenant_private",
+            kind="street_or_road",
+            district_name="Kathmandu",
+            local_level_name="Kathmandu Metropolitan City",
+            name_en="First Road",
+            aliases_en=["First Rd"],
+        )
+    )
+    stale_second_store.upsert(
+        AddressEvidenceRecord(
+            id="addr_second",
+            tenant_id="demo-institution",
+            visibility="tenant_private",
+            kind="street_or_road",
+            district_name="Kathmandu",
+            local_level_name="Kathmandu Metropolitan City",
+            name_en="Second Road",
+            aliases_en=["Second Rd"],
+        )
+    )
+
+    reloaded = AddressEvidenceStore(path=path, seed_records=[])
+    assert reloaded.search("First Rd", tenant_id="demo-institution")
+    assert reloaded.search("Second Rd", tenant_id="demo-institution")
+
+
+def test_upsert_rejects_unknown_visibility_or_kind(tmp_path: Path):
+    store = AddressEvidenceStore(path=tmp_path / "address_evidence.json", seed_records=[])
+
+    with pytest.raises(ValueError, match="Unsupported address evidence visibility"):
+        store.upsert(
+            AddressEvidenceRecord(
+                id="addr_bad_visibility",
+                tenant_id="demo-institution",
+                visibility="public",
+                kind="area_or_tole",
+                name_en="Bad Visibility",
+            )
+        )
+
+    with pytest.raises(ValueError, match="Unsupported address evidence kind"):
+        store.upsert(
+            AddressEvidenceRecord(
+                id="addr_bad_kind",
+                tenant_id="demo-institution",
+                visibility="tenant_private",
+                kind="planet",
+                name_en="Bad Kind",
+            )
+        )
+
+
 def test_csv_import_builds_records_with_aliases(tmp_path: Path):
     csv_path = tmp_path / "addresses.csv"
     csv_path.write_text(
@@ -96,6 +157,18 @@ def test_csv_import_builds_records_with_aliases(tmp_path: Path):
     assert len(records) == 1
     assert records[0].name_en == "Samakhusi"
     assert records[0].aliases_en == ["Samakushi", "Samakhusi Chowk"]
+
+
+def test_csv_import_rejects_bad_confidence_weight(tmp_path: Path):
+    csv_path = tmp_path / "addresses.csv"
+    csv_path.write_text(
+        "district,local_level,ward,kind,name_en,confidence_weight\n"
+        "Kathmandu,Kathmandu Metropolitan City,26,area_or_tole,Bad Weight,2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="confidence_weight must be between 0 and 1"):
+        import_address_evidence_csv(csv_path, tenant_id="demo-institution", source="manual_seed")
 
 
 def test_tenant_cannot_overwrite_another_tenant_private_record_by_id(tmp_path: Path):
