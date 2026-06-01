@@ -12,15 +12,17 @@ LipiOCR is not positioned as "OCR only." The core product is LipiCore-assisted d
 - Nepali name lexicon correction candidates for reviewer-safe name repair.
 - Entity reconciliation across documents.
 - Confidence repair with audit reasons.
+- Permanent Nepal identity templates for citizenship, National ID, passport, and driving license, with Super Admin governance.
 - Reviewer-safe correction before export.
 
 ## What It Does
 
 - Reads full-page documents and keeps OCR evidence: pages, blocks, bounding boxes, raw text, confidence, and page references.
-- Supports Nepal document workflows: citizenship, National ID, passport, smart driving license, PAN/VAT, bank KYC/account forms, IPO/C-ASBA forms, cheques, statements, KYB documents, and unknown document packets.
+- Supports Nepal document workflows: old/new citizenship, front/back citizenship copies on one photocopied page, National ID, passport, smart driving license, PAN/VAT, bank KYC/account forms, IPO/C-ASBA forms, cheques, statements, KYB documents, and unknown document packets.
 - Extracts fields using both full-page LipiCore reasoning and tenant-specific templates.
+- Tracks visual evidence regions such as photos, signatures, stamps, and thumbprints where templates or OCR evidence identify them. It does not perform biometric, signature, or fraud verification unless a configured adapter provides that capability.
 - Lets reviewers correct uncertain fields while preserving original OCR values and audit history.
-- Normalizes Nepali and English fields into export-ready structures for downstream systems.
+- Normalizes Nepali and English fields into export-ready structures for downstream CBS, LOS, CRM, DMS, registry, and archive systems.
 - Provides validation, verification adapter scaffolding, maker-checker workflow, comments, rework, and approval.
 - Exports JSON/API payloads and supports signed webhooks, SFTP batch receipts, idempotency keys, and embedded review links.
 - Supports on-prem/private-cloud deployment and SaaS-oriented tenant controls.
@@ -77,7 +79,7 @@ Open:
 - API: `http://localhost:8010`
 - API docs: `http://localhost:8010/docs`
 
-Local defaults use memory storage, local uploads, mock OCR, disabled auth, and disabled Gemma/LipiCore remote calls so the app runs without infrastructure.
+Local defaults use memory storage, local uploads, mock OCR, disabled auth, and disabled LipiCore remote calls so the app runs without infrastructure. Mock mode is for UI, workflow, and test development only. Real pilots must configure an approved OCR/LipiCore provider and benchmark it against institution-approved samples.
 
 ## Verification
 
@@ -183,7 +185,11 @@ Implemented:
 - OCR provider interface for mock, Tesseract, PaddleOCR, and Gemma vision.
 - Session and API-key auth, RBAC, upload hardening, signed previews.
 - Tenant context, tenant registry, and tenant-scoped object keys.
-- Template studio, drafts, profiles, approval, rollback, import/export, and test runs.
+- Permanent Nepal identity templates for citizenship, National ID, passport, and driving license.
+- Template studio, multipage drafts, profiles, approval, rollback, import/export, and test runs.
+- Nepal administrative location resolver for province, district, municipality/gaunpalika, legacy VDC wording, and ward checks.
+- Tenant-safe address evidence store for approved road, street, tole, and area aliases.
+- Nepali name lexicon suggestions for reviewer-safe correction candidates.
 - Accuracy analytics and benchmark report scaffolding.
 - Signed webhook/SFTP delivery receipts with idempotency keys.
 - Compliance reports, backup readiness, incident response, and DR runbooks.
@@ -194,6 +200,7 @@ Still requires institution-specific production integration:
 - Real SSO/OIDC/SAML.
 - Real National ID/PAN/VAT/AML/liveness/CBS/LOS/DMS credentials.
 - Real Nepali document accuracy benchmark dataset.
+- Institution-approved address/name reference datasets and review governance.
 - External worker orchestration and production migration policy.
 - Per-tenant encryption key management and observability stack.
 

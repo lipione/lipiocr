@@ -54,8 +54,22 @@ Before production:
 - Set exact `LIPIOCR_CORS_ORIGINS`.
 - Enable `LIPIOCR_API_AUTH_ENABLED=true`.
 - Configure institution-approved OCR provider.
+- Mount persistent paths for uploads, template stores, address evidence, name lexicon, and benchmark manifests.
 - Keep MinIO and Postgres private.
 - Put TLS and access control in front of the stack.
+
+## Persistent Data
+
+Production deployments must treat these as durable application data:
+
+| Data | Typical location | Notes |
+| --- | --- | --- |
+| Uploaded documents | S3/MinIO bucket or mounted upload volume | Contains customer PII. Encrypt and back up. |
+| Template stores | `LIPIOCR_TEMPLATE_STORE`, `LIPIOCR_TEMPLATE_PROFILE_STORE` | Includes approved custom templates and permanent-template revisions. |
+| Address evidence | `LIPIOCR_ADDRESS_EVIDENCE_PATH` | Tenant-private road/tole/street evidence. Do not share across tenants unless approved. |
+| Name lexicon | `LIPIOCR_NEPALI_NAME_LEXICON` | Generated from approved local data; raw CSV remains outside Git. |
+| Benchmark manifest | `LIPIOCR_BENCHMARK_MANIFEST` | Approved accuracy dataset metadata and expected values. |
+| Database | `DATABASE_URL` | Cases, audit events, users, jobs, integration receipts. |
 
 ## Remote Server Layout
 
@@ -150,7 +164,7 @@ Production teams should also snapshot:
 - MinIO/S3 bucket.
 - `infra/.env` from a secret vault.
 - TLS material from the institution-approved vault.
-- Template stores and deployment manifests.
+- Template stores, address evidence store, name lexicon, benchmark manifest, and deployment manifests.
 
 ## Restore
 
@@ -171,6 +185,9 @@ After restore, validate:
 - Review/correction flow.
 - Export profile.
 - Audit/compliance report.
+- Template studio pages and approved profiles.
+- Address evidence search/resolve.
+- Name correction suggestions on a known test sample.
 
 ## Upgrade And Rollback
 
@@ -228,3 +245,9 @@ curl http://localhost:8020/api/platform/status
 ```
 
 When auth is enabled, authenticated operational checks should use a scoped auditor/admin key.
+
+## On-Prem And SaaS Differences
+
+On-prem single-institution deployments usually set one `LIPIOCR_DEFAULT_TENANT_ID` and keep all services inside the institution network. SaaS/private-cloud deployments must additionally verify tenant isolation across cases, documents, object keys, template profiles, address evidence, jobs, exports, and audit reports.
+
+Do not reuse API keys, session secrets, preview secrets, webhook secrets, or object-storage credentials between tenants or environments.

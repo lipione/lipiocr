@@ -11,8 +11,9 @@ Read this together with [Deployment](../../docs/deployment.md) and [Configuratio
 3. Create `infra/.env` from `infra/.env.example`.
 4. Replace all placeholder secrets in `infra/.env`.
 5. Run `deploy/scripts/validate-env.sh infra/.env`.
-6. Start services with `cd infra && docker compose --env-file .env up -d --build`.
-7. Run `deploy/scripts/health-check.sh http://localhost:8020`.
+6. Mount or provision durable paths for uploads, template stores, address evidence, name lexicon, and benchmark manifests.
+7. Start services with `cd infra && docker compose --env-file .env up -d --build`.
+8. Run `deploy/scripts/health-check.sh http://localhost:8020`.
 
 ## Services
 
@@ -44,6 +45,18 @@ Replace:
 
 Do not expose MinIO or Postgres publicly.
 
+## Durable Data
+
+Keep these outside ephemeral containers:
+
+- Uploaded documents in MinIO/S3 or a mounted upload volume.
+- Template stores from `LIPIOCR_TEMPLATE_STORE` and `LIPIOCR_TEMPLATE_PROFILE_STORE`.
+- Address evidence from `LIPIOCR_ADDRESS_EVIDENCE_PATH`.
+- Nepali name lexicon from `LIPIOCR_NEPALI_NAME_LEXICON`.
+- Accuracy benchmark manifest from `LIPIOCR_BENCHMARK_MANIFEST`.
+
+Raw KYC samples, raw name datasets, and customer address data must not be copied into the repository bundle.
+
 ## Backups
 
 Use `deploy/scripts/backup.sh /backup/lipiocr` from the host. It exports Postgres and captures uploaded object files when local volumes are mounted.
@@ -53,6 +66,7 @@ Also retain:
 - `infra/.env` from a secret vault.
 - TLS material from the institution vault.
 - Object-storage snapshots if MinIO/S3 is externalized.
+- Template stores, address evidence, name lexicon, and benchmark manifests.
 - Git commit or image tags deployed.
 
 ## Restore

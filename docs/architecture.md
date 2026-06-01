@@ -26,10 +26,24 @@ flowchart TD
     Extraction --> Review["Human Review + Correction"]
     Review --> Validation["Validation + Verification Adapters"]
     Validation --> Export["JSON/API/Webhook/SFTP Export"]
+    API --> Reference["Nepal Location, Name, Address Evidence"]
     API --> Audit["Audit + Compliance Reports"]
     Cases --> DB["Memory or PostgreSQL"]
     API --> Storage["Local Uploads or S3/MinIO"]
 ```
+
+## Nepal Document Reality
+
+Nepal KYC documents are not one uniform template. Citizenship documents have old and new layouts, front and back sides, English summary blocks on some backs, photocopied front/back pairs on one page, handwritten overwrites, stamps, low-resolution phone photos, and mixed Nepali/English fields. Financial institutions also receive ASBA forms, account-opening forms, KYC refresh forms, and supporting IDs in one packet.
+
+LipiOCR handles this with layered extraction:
+
+1. Capture full-page OCR evidence first.
+2. Detect document type and likely page surface: front, back, combined front/back, form page, receipt, or unknown page.
+3. Apply permanent Nepal identity templates where the document is stable enough.
+4. Apply tenant templates for institution-specific forms.
+5. Use LipiCore reasoning and reference datasets to map remaining fields.
+6. Route uncertain fields to reviewer correction instead of silently exporting guessed values.
 
 ## Backend Modules
 
@@ -49,6 +63,10 @@ flowchart TD
 | `app/services/enterprise_extraction.py` | Enterprise document processing orchestration. |
 | `app/services/templates.py` | Built-in and coordinate-template extraction support. |
 | `app/services/template_profiles.py` | Template drafts, profiles, approval, rollback, import/export. |
+| `app/services/nepal_locations.py` | Nepal province, district, local-level, legacy VDC, and ward resolution. |
+| `app/services/address_evidence_store.py` | Tenant-safe address evidence storage for road, street, tole, and area aliases. |
+| `app/services/address_intelligence.py` | Address candidate scoring from registry and address evidence. |
+| `app/services/nepali_name_lexicon.py` | Nepali-name lexicon suggestions and bilingual name repair candidates. |
 | `app/services/integrations.py` | Export profiles, webhook test payloads, embedded review links. |
 | `app/integrations/` | Idempotency, webhook delivery signing, SFTP batch delivery receipts. |
 | `app/tenancy/` | Tenant registry, isolation checks, tenant-scoped object keys. |
@@ -67,7 +85,7 @@ flowchart TD
 | `/templates` | Template studio, extraction pipeline, draft/profile governance. |
 | `/integrations` | Export profiles, webhook/SFTP operations, retry queue, payload review. |
 | `/analytics` | Accuracy analytics, correction trends, benchmark summaries. |
-| `/admin` | Tenant, RBAC, audit, compliance, readiness posture. |
+| `/admin` | Tenant, RBAC, audit, compliance, readiness posture, and address dataset controls. |
 
 The frontend uses a top module switcher rather than a heavy sidebar. API calls go through `frontend/src/lib/api-client.ts`, which handles base URL resolution, reverse-proxy base paths, credentials, and friendly auth errors.
 
@@ -116,6 +134,19 @@ Confidence repair must not silently overwrite OCR. A repaired field should retai
 - Confidence before and after repair.
 - Audit reason.
 
+## Reference Intelligence
+
+The reference layer is deterministic and reviewer-safe. It suggests candidates; it does not auto-approve customer data without evidence.
+
+| Reference | Purpose | Privacy rule |
+| --- | --- | --- |
+| Nepal location registry | Resolve province, district, municipality/gaunpalika, legacy VDC wording, and ward. | Shared safe reference. |
+| Address evidence store | Match road, street, tole, area, and aliases against tenant-approved evidence. | Tenant-private by default. Shared reference requires platform approval. |
+| Nepali name lexicon | Suggest likely Nepali/romanized name corrections, such as `kaki` -> `karki`, when supported by lexicon or bilingual pair evidence. | Approved lexicon only; raw customer names stay outside Git. |
+| Bilingual field pairs | Compare Nepali and English fields from the same or related documents. | Preserve both original values and correction reasons. |
+
+Full home addresses and reviewer corrections are personal data. They must not be promoted into shared address evidence unless they have been reduced to non-personal road, tole, or area records and approved by the institution.
+
 ## Template Strategy
 
 LipiOCR uses two extraction paths:
@@ -126,13 +157,24 @@ LipiOCR uses two extraction paths:
 Template profiles are tenant-scoped and support:
 
 - Draft creation.
-- Field boxes and labels.
+- Multipage sample uploads, including PDFs expanded into page images.
+- Field boxes, labels, field types, language hints, and validation hints.
+- Manual add, resize, move, and remove operations in the template editor.
 - Approval.
 - Rollback.
 - Import/export.
 - Test runs against extracted fields.
 
 Coordinate templates are useful for stable bank, C-ASBA, account-opening, and onboarding forms. Full-page LipiCore extraction remains necessary for unknown or noisy uploads.
+
+Permanent templates are reserved for Nepal identity documents that apply across institutions:
+
+- Citizenship certificate.
+- National Identity Card.
+- Passport.
+- Smart driving license.
+
+Tenant admins can create and approve institution templates. Only `super_admin` can revise permanent Nepal identity templates.
 
 ## Tenancy And Security
 
@@ -162,6 +204,7 @@ Production shape:
 - OCR: Gemma vision, PaddleOCR, Tesseract, or provider adapter.
 - Jobs: async worker flow backed by queue and retry semantics.
 - Auth: session or API-key auth enabled, with institution SSO planned.
+- Reference stores: mounted address evidence, mounted Nepali name lexicon, mounted template stores, and benchmark manifests.
 
 ## Integrations
 

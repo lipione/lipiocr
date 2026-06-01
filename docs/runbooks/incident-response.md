@@ -13,10 +13,11 @@ Use this runbook for production or pilot incidents affecting confidentiality, in
 1. Assign incident commander and scribe.
 2. Freeze deployment changes unless required for containment.
 3. Identify affected tenants, branches, cases, documents, and integrations.
-4. Preserve audit logs, API logs, worker logs, and reverse proxy logs.
+4. Preserve audit logs, API logs, worker logs, reverse proxy logs, job payload metadata, and integration receipts.
 5. Disable affected integration keys or operator accounts if access is suspected.
 6. Stop automatic retries for failing integrations if they may duplicate downstream records.
 7. Record the current Git commit, image tags, and environment version.
+8. Snapshot relevant template stores, address evidence, name lexicon, and benchmark manifest paths before making corrective edits.
 
 ## Containment Options
 
@@ -24,6 +25,8 @@ Use this runbook for production or pilot incidents affecting confidentiality, in
 - Revoke operator sessions.
 - Pause webhook/SFTP delivery.
 - Disable a verification adapter.
+- Disable a recently changed template profile or roll back to the previous approved profile.
+- Disable incorrect tenant address evidence so it stops producing suggestions.
 - Put reverse proxy route behind institution VPN or maintenance page.
 - Roll back to the last known-good image.
 - Restore from backup only when data integrity requires it.
@@ -51,4 +54,5 @@ Required closure checks:
 - Affected API keys or sessions rotated.
 - Failed integration deliveries reconciled.
 - Any exported downstream data reconciled with the institution.
+- Incorrect template, name, or address reference changes reverted or disabled.
 - Regression test or runbook update created for the failure mode.

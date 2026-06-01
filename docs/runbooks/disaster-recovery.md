@@ -13,6 +13,10 @@ The institution owner must approve final RPO/RTO values before go-live.
 
 - PostgreSQL dump from `deploy/scripts/backup.sh`.
 - Uploaded documents and template artifacts from the storage volume or S3/MinIO bucket.
+- Template runtime store and template profile store.
+- Address evidence JSON store.
+- Nepali name lexicon JSON.
+- Accuracy benchmark manifest and approved benchmark metadata.
 - `infra/.env` and TLS material from the institution secret vault.
 - Git commit SHA or image tags from the last known-good deployment.
 - Reverse proxy and firewall configuration.
@@ -26,8 +30,9 @@ The institution owner must approve final RPO/RTO values before go-live.
 5. Start services.
 6. Run `deploy/scripts/health-check.sh`.
 7. Validate sample case preview, review, export, and audit reports.
-8. Confirm reverse proxy route and TLS certificate.
-9. Confirm no cross-tenant data exposure in SaaS/private-cloud mode.
+8. Validate template studio profiles, address evidence search, and name correction suggestions.
+9. Confirm reverse proxy route and TLS certificate.
+10. Confirm no cross-tenant data exposure in SaaS/private-cloud mode.
 
 ## Validation Checklist
 
@@ -39,6 +44,9 @@ The institution owner must approve final RPO/RTO values before go-live.
 - Reviewer correction can be saved.
 - Export profile can be generated.
 - Compliance report can be generated.
+- Approved template profiles are present.
+- Address evidence search/resolve works for a known tenant-private sample.
+- Name lexicon suggestions work on a known non-sensitive test value.
 - Backup restored timestamp is recorded.
 
 ## Evidence

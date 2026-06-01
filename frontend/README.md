@@ -26,7 +26,7 @@ Read `AGENTS.md` before changing Next.js conventions. This project uses a newer 
 | `/templates` | Template studio and extraction governance. |
 | `/integrations` | CBS/LOS/CRM/DMS export profiles, webhook/SFTP operations. |
 | `/analytics` | Accuracy, corrections, benchmark posture. |
-| `/admin` | Platform, tenant, RBAC, audit, and compliance posture. |
+| `/admin` | Platform, tenant, RBAC, audit, compliance posture, and address dataset controls. |
 
 ## Local Development
 
@@ -93,9 +93,21 @@ make test
 - Avoid hiding core review actions behind dropdowns.
 - Keep split-view document evidence and editable extracted data close together.
 - Preserve original OCR values, corrected values, confidence, and audit reasons in UI surfaces.
+- Show name and address correction candidates as reviewer choices with sources, not as invisible overwrites.
+- Keep citizenship/National ID front-back and photocopied combined-page workflows understandable from the review screen.
 - Use existing workspace components and route patterns before creating new layout primitives.
 - Use icons for compact actions where they are familiar, with accessible labels/tooltips.
 - Keep model/provider names out of operator-facing UI; use product language such as LipiCore.
+
+## Template Studio UX
+
+The template studio should feel like a document editor, not a settings table:
+
+- Give the uploaded page maximum canvas space.
+- Support zoom, pan, page selection, add box, remove box, drag, resize, rename, and save.
+- Keep multipage PDFs as one template draft with per-page fields.
+- Surface quality checks before publish.
+- Make permanent ID templates visibly governed; only `super_admin` can revise platform identity templates.
 
 ## Common Files
 

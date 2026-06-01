@@ -95,7 +95,8 @@ Local defaults:
 7. Correct fields in the review workflow.
 8. Run validation, verification, export profile, and audit views.
 9. Use `Templates` to draft or import a template for known document formats.
-10. Use `Integrations` to inspect REST, webhook, SFTP, and retry flows.
+10. Use `Admin` to inspect tenant settings, RBAC, compliance, and address dataset controls.
+11. Use `Integrations` to inspect REST, webhook, SFTP, and retry flows.
 
 ## Auth During Development
 
@@ -219,6 +220,8 @@ cd backend
 
 The generated file defaults to `backend/storage/name-lexicon/nepali_name_lexicon.json` and is ignored by Git. Override with `LIPIOCR_NEPALI_NAME_LEXICON` when deploying a tenant-approved lexicon path.
 
+The lexicon is used for correction candidates, not blind replacement. If OCR reads `kaki` but the Nepali/English pair and lexicon support `karki`, the reviewer should see a candidate with original value, suggested value, confidence, sources, and audit reason.
+
 ## Address Evidence Dataset
 
 LipiOCR ships with a small safe development seed in `backend/app/data/address_evidence_seed.json`.
@@ -228,8 +231,29 @@ Tenant-approved evidence is stored outside Git by default:
 export LIPIOCR_ADDRESS_EVIDENCE_PATH=storage/address-evidence/address_evidence.json
 ```
 
-Use the Super Admin Address Dataset panel or `/api/reference/address-evidence/import` to add institution-approved road, street, and tole records.
+Use the Admin Address Dataset panel or `/api/reference/address-evidence/import` to add institution-approved road, street, and tole records.
 Reviewer-corrected full home addresses must remain tenant-private. Convert only non-personal area, tole, road, or street names into reusable evidence.
+
+Minimal CSV columns for local import tooling:
+
+```text
+district,local_level,ward,kind,name_en,aliases_en,confidence_weight
+Kathmandu,Kathmandu Metropolitan City,26,area_or_tole,Samakhusi,"Samakushi|Samakhusi Tole",0.9
+```
+
+Use `tenant_private` evidence for institution-specific data. Shared reference data needs platform approval.
+
+## Template Studio Workflow
+
+1. Open `Templates`.
+2. Upload a blank or sample form. Multipage PDFs are expanded into template pages when supported locally.
+3. Let the system suggest document type, labels, preset fields, and quality checks.
+4. Zoom and pan the canvas, then add, move, resize, rename, or remove boxes.
+5. Save the draft.
+6. Publish and approve the profile.
+7. Run a test extraction against known samples before using the profile in a pilot.
+
+Permanent templates for citizenship, National ID, passport, and smart driving license are platform templates. Tenant admins can build custom institution forms, but only `super_admin` can revise permanent identity templates.
 
 ## Persistence Modes
 
@@ -287,6 +311,14 @@ Add a new template capability:
 4. Update the `Templates` frontend module if reviewers need a new control.
 5. Update [Architecture](./architecture.md) and [API Reference](./api-reference.md).
 
+Add or change reference intelligence:
+
+1. Add backend tests for the reference store or resolver.
+2. Keep customer-specific data tenant-private.
+3. Return suggestions with source evidence and audit reasons.
+4. Do not silently raise confidence unless another field, registry match, or approved evidence supports it.
+5. Update [Configuration](./configuration.md), [Architecture](./architecture.md), and [API Reference](./api-reference.md) if operators need to know the behavior.
+
 ## Coding Rules For This Repo
 
 - Keep extraction evidence-backed: every exported value should trace to OCR, template, reviewer correction, or deterministic rule.
@@ -322,6 +354,19 @@ Gemma extraction returns fallback or empty data
 - Confirm `LIPIOCR_GEMMA_API_BASE` points to the OpenAI-compatible vLLM endpoint.
 - Confirm the selected model supports the requested text or vision input.
 - Use mock mode if you only need UI/workflow development.
+
+Template mapping looks wrong
+
+- Check image quality, skew, and crop boundaries.
+- Use zoom in the template studio and resize boxes manually.
+- Confirm the document really matches the selected template or create a new tenant template variant.
+- For citizenship/National ID front/back photocopies on one page, use document intelligence output and reviewer correction when one fixed coordinate template cannot cover every historical layout.
+
+Name or address suggestions are missing
+
+- Confirm the Nepali name lexicon was generated and mounted through `LIPIOCR_NEPALI_NAME_LEXICON`.
+- Confirm address evidence exists through the Admin Address Dataset panel or `/api/reference/address-evidence`.
+- Confirm the field key is a name/address-like key so document intelligence attaches suggestions.
 
 Compose fails at startup
 

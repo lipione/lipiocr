@@ -69,6 +69,8 @@ Fix it by creating a session, sending `X-LipiOCR-API-Key`, or disabling auth for
 | `GET` | `/api/cases/{case_id}/export` | Export case JSON. |
 | `GET` | `/api/cases/{case_id}/export-profile/{profile_key}` | Export case for a configured profile such as CBS/LOS. |
 
+Case document uploads accept images, PDFs, and text fixtures permitted by upload policy. PDF and multipage uploads are expanded where supported by the current processing path. Reanalysis preserves the case/document identity and replaces extracted outputs with a new audit event.
+
 ## Standalone Documents
 
 Standalone documents are for packet digitization or documents not attached to an applicant application.
@@ -84,6 +86,8 @@ Standalone documents are for packet digitization or documents not attached to an
 | `POST` | `/api/documents/{document_id}/link-application` | Link standalone document to an applicant/case. |
 | `PATCH` | `/api/documents/{document_id}/review` | Submit review corrections or decision. |
 | `GET` | `/api/documents/{document_id}/export` | Export document JSON. |
+
+Use standalone documents for archive digitization, historical KYC cleanup, or a file that is not yet tied to an applicant. Link it later with `/api/documents/{document_id}/link-application` when the applicant or case becomes known.
 
 ## Review
 
@@ -121,6 +125,24 @@ Adapters without credentials must return explicit `not_configured` or sandbox st
 
 The location resolver is used by document intelligence to fill canonical address fields and flag district/local-level mismatches before export.
 
+Address evidence records are tenant-private by default. The API accepts approved road, street, tole, and area aliases. Full customer home addresses should not be imported as shared evidence.
+
+Minimal address evidence payload:
+
+```json
+{
+  "district_name": "Kathmandu",
+  "local_level_name": "Kathmandu Metropolitan City",
+  "ward": "26",
+  "kind": "area_or_tole",
+  "name_en": "Samakhusi",
+  "aliases_en": ["Samakushi", "Samakhusi Tole"],
+  "visibility": "tenant_private"
+}
+```
+
+Nepali name correction candidates are returned inside document intelligence and review-field payloads when the name lexicon or bilingual field pair supports a suggestion. There is no separate public mutation API for the name lexicon; build and mount it through deployment configuration.
+
 ## Templates
 
 | Method | Path | Purpose |
@@ -137,6 +159,8 @@ The location resolver is used by document intelligence to fill canonical address
 | `GET` | `/api/admin/templates/profiles/{profile_id}/export` | Export profile JSON. |
 | `POST` | `/api/admin/templates/profiles/import` | Import profile JSON. |
 | `POST` | `/api/admin/templates/profiles/{profile_id}/test` | Test profile against field data. |
+
+`POST /api/admin/templates/drafts` accepts multipart template images/PDFs and creates a draft with pages, OCR blocks, suggested fields, and quality checks. Tenant admins can manage custom institution templates. Permanent identity templates for citizenship, National ID, passport, and driving license require `super_admin` permission to overwrite.
 
 ## Integrations
 

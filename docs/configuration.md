@@ -55,6 +55,20 @@ Configuration is environment-variable driven. Do not commit real `.env` files.
 | `LIPIOCR_PUBLIC_APP_BASE_URL` | `http://localhost:3000` | Public base URL used for review links. |
 | `LIPIOCR_BENCHMARK_MANIFEST` | empty | Optional JSON manifest path for approved OCR benchmark samples. Defaults to the local benchmark store or test fixture. |
 
+## Reference Data Stores
+
+The reference data stores improve extraction quality without turning reviewer corrections into hidden automation.
+
+| Store | Configure with | Contents | Git policy |
+| --- | --- | --- | --- |
+| Nepal location registry | Built in | Province, district, local level, type, legacy aliases, ward hints. | Safe source data can be committed when non-sensitive. |
+| Nepali name lexicon | `LIPIOCR_NEPALI_NAME_LEXICON` | Compact approved name/token frequencies derived from local CSVs. | Raw name datasets stay outside Git. Generated lexicons can be mounted per deployment. |
+| Address evidence | `LIPIOCR_ADDRESS_EVIDENCE_PATH` | Approved road, street, tole, and area aliases. | Tenant-private evidence stays outside Git. |
+| Template stores | `LIPIOCR_TEMPLATE_STORE`, `LIPIOCR_TEMPLATE_PROFILE_STORE` | Runtime templates, drafts, profiles, approvals, rollback state. | Production stores stay on mounted volumes or database-backed storage. |
+| Accuracy benchmark | `LIPIOCR_BENCHMARK_MANIFEST` | Institution-approved benchmark samples and expected field labels. | Real customer samples stay outside Git. |
+
+For SaaS mode, make sure mounted stores or database-backed replacements preserve tenant ownership. A tenant must not be able to mutate another tenant's address evidence or permanent platform templates.
+
 ## Frontend Variables
 
 | Variable | Local default | Production guidance |
@@ -116,6 +130,7 @@ LIPIOCR_REPOSITORY_BACKEND=sql
 LIPIOCR_STORAGE_BACKEND=s3
 LIPIOCR_OCR_PROVIDER=gemma_vision
 LIPIOCR_API_AUTH_ENABLED=true
+LIPIOCR_LOAD_TEMPLATE_STORE=true
 ```
 
 ## Upload Policy
