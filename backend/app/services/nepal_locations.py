@@ -89,8 +89,10 @@ class LocationResolution:
     province_name: Optional[str] = None
     district_code: Optional[str] = None
     district_name: Optional[str] = None
+    district_name_np: Optional[str] = None
     local_level_code: Optional[str] = None
     local_level_name: Optional[str] = None
+    local_level_name_np: Optional[str] = None
     local_level_key: Optional[str] = None
     local_level_type: Optional[str] = None
     ward: Optional[str] = None
@@ -123,8 +125,10 @@ class LocationResolution:
             "province_name": self.province_name,
             "district_code": self.district_code,
             "district_name": self.district_name,
+            "district_name_np": self.district_name_np,
             "local_level_code": self.local_level_code,
             "local_level_name": self.local_level_name,
+            "local_level_name_np": self.local_level_name_np,
             "local_level_key": self.local_level_key,
             "local_level_type": self.local_level_type,
             "ward": self.ward,
@@ -278,8 +282,10 @@ class NepalLocationRegistry:
             province_name=province_name,
             district_code=district.code if district else None,
             district_name=district.name_en if district else None,
+            district_name_np=district.name_np if district else None,
             local_level_code=local_level.code if local_level else None,
             local_level_name=local_level.name_en if local_level else None,
+            local_level_name_np=local_level.name_np if local_level else None,
             local_level_key=local_level.key if local_level else None,
             local_level_type=local_level.type if local_level else None,
             ward=ward,

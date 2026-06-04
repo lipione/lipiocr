@@ -89,6 +89,9 @@ export function ProductHome() {
             <LipiOcrLogo label="LipiOCR Enterprise" size="sm" />
           </Link>
           <div className="hidden items-center gap-6 text-sm font-bold text-slate-600 md:flex">
+            <Link className="hover:text-cyan-700" href="/demo">
+              Demo
+            </Link>
             <a className="hover:text-cyan-700" href="#features">
               Features
             </a>
@@ -142,9 +145,9 @@ export function ProductHome() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-5 text-sm font-extrabold text-slate-950 shadow-[0_18px_40px_-18px_rgba(255,255,255,0.7)] hover:-translate-y-0.5"
-                href="/documents"
+                href="/demo"
               >
-                Review Documents
+                Run Demo
                 <ArrowRight size={17} />
               </Link>
               <Link

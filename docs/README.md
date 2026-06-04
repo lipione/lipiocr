@@ -8,7 +8,8 @@ This directory is the operating manual for LipiOCR Enterprise. It should stay al
 | --- | --- | --- |
 | New developer | [Developer Onboarding](./developer-onboarding.md) | Local setup, repo map, test commands, common workflows. |
 | Backend engineer | [Architecture](./architecture.md) | Service boundaries, data flow, OCR/LipiCore pipeline, tenancy model. |
-| Frontend engineer | [Developer Onboarding](./developer-onboarding.md) and [Frontend README](../frontend/README.md) | Next.js routes, API client behavior, UI conventions. |
+| Frontend engineer | [Developer Onboarding](./developer-onboarding.md), [Frontend README](../frontend/README.md), and [Interface System](../.interface-design/system.md) | Next.js routes, API client behavior, UI conventions, and persistent interface rules. |
+| ML/OCR engineer | [Model Training Strategy](./model-training-strategy.md) | Dataset capture, OCR fine-tuning, LipiVision training, benchmark governance. |
 | Integrator | [API Reference](./api-reference.md) | Auth, case flow, document upload, review, exports, webhooks, SFTP batches. |
 | DevOps engineer | [Configuration](./configuration.md) and [Deployment](./deployment.md) | Environment variables, Docker Compose, Helm, reverse proxy, backups. |
 | Security reviewer | [Production Security Checklist](./security/production-security-checklist.md) | Production controls that must be verified before go-live. |
@@ -24,6 +25,7 @@ The product is not a simple OCR demo. It is built around:
 - Full-page OCR evidence with pages, blocks, bounding boxes, confidence, and raw text retention.
 - LipiCore reasoning for bilingual field pairing, date normalization, entity reconciliation, confidence repair, and reviewer-safe correction.
 - Nepal-specific reference intelligence for administrative locations, road/tole evidence, and Nepali name correction suggestions.
+- Trainable OCR and vision direction: PaddleOCR for printed OCR, handwriting recognizer for line crops, region detector for visual evidence, and Gemma-style LipiVision for document understanding.
 - Human review with editable fields, audit trail, assignment, comments, rework, and maker-checker workflow.
 - Permanent identity templates for Nepal citizenship, National ID, passport, and driving license, plus tenant-scoped templates for institution forms.
 - Template studio for known forms, multipage sample uploads, manual box adjustment, approval, rollback, and a fallback full-page extraction path for unknown documents.
@@ -43,6 +45,7 @@ Implemented foundations:
 - Template drafts, profiles, approval, rollback, import/export, and test runs.
 - Nepal location resolver, address evidence dataset, and Nepali name lexicon suggestion flow.
 - Accuracy analytics and benchmark report scaffolding.
+- Demo extraction lab for single-page and multipage Nepal KYC samples at `/demo`.
 - Signed webhook and SFTP delivery receipts with idempotency keys.
 - Compliance reports, retention posture, backup readiness, incident and DR runbooks.
 - Docker Compose, Helm skeleton, Nginx subpath config, backup/restore/health scripts.
@@ -52,6 +55,7 @@ Known production work that still needs real institution integration:
 - SSO/OIDC/SAML provider integration.
 - Real registry, PAN/VAT, AML, liveness, and CBS/LOS/DMS credentials.
 - Real OCR benchmark dataset collected from institution-approved samples.
+- Reviewer-approved training dataset capture and exports for PaddleOCR, YOLO/COCO, LipiVision JSONL, and benchmark reports.
 - Institution-approved name, road, tole, and address evidence datasets for production accuracy improvement.
 - Hardened production database migrations and external worker orchestration.
 - Per-tenant encryption key management and observability stack integration.
@@ -59,6 +63,8 @@ Known production work that still needs real institution integration:
 ## Repository Docs Policy
 
 - Root [README](../README.md) is the product and quickstart entry point.
+- [Interface System](../.interface-design/system.md) is the UI memory for dashboard, workbench, template, and governance design decisions.
+- [Model Training Strategy](./model-training-strategy.md) is the canonical ML/OCR roadmap.
 - `docs/*.md` contains operator and developer reference.
 - `docs/superpowers/*` contains implementation planning history, not the product manual.
 - Real credentials, server passwords, private keys, customer data, and institution samples must never be committed.

@@ -89,6 +89,51 @@ Standalone documents are for packet digitization or documents not attached to an
 
 Use standalone documents for archive digitization, historical KYC cleanup, or a file that is not yet tied to an applicant. Link it later with `/api/documents/{document_id}/link-application` when the applicant or case becomes known.
 
+## Demo Extraction Lab
+
+The demo endpoints power the `/demo` frontend route. They are intended for fast pilot demonstrations, OCR debugging, and sample comparison. They do not replace the case/document workflow or production review pipeline.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/demo/extract` | Upload one image/PDF page and return document understanding, extracted fields, raw OCR evidence, warnings, providers, and visual assets. |
+| `POST` | `/api/demo/extract-pages` | Upload multiple image/PDF pages and return aggregate extraction plus per-page results. |
+
+Single-page request:
+
+```bash
+curl -s -F "file=@/path/to/sample.jpg" \
+  -F prefer_lipicore=true \
+  http://localhost:8010/api/demo/extract
+```
+
+Multipage request:
+
+```bash
+curl -s -F "files=@/path/to/front.jpg" \
+  -F "files=@/path/to/back.jpg" \
+  -F prefer_lipicore=true \
+  http://localhost:8010/api/demo/extract-pages
+```
+
+Response fields:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `processed`, `processed_with_warnings`, or `failed`. |
+| `filename` | Uploaded filename or aggregate packet name. |
+| `document_type` | Best document type such as `citizenship`, `asba_application`, or `unknown`. |
+| `document_understanding` | Signals, language profile, content hints, confidence, and explanation for the detected document type. |
+| `summary` | Short product-facing summary of extraction. |
+| `overall_confidence` | Aggregate confidence for the demo result. |
+| `fields` | Extracted and editable field proposals with original/normalized values, source, confidence, and reasoning. |
+| `raw_text` | Retained OCR evidence text for debugging and reviewer mapping. |
+| `warnings` | Quality, confidence, fallback, or unsupported-document warnings. |
+| `providers` | Diagnostic OCR/reasoning providers. Keep this out of ordinary operator-facing copy. |
+| `pages` | Present on multipage requests; contains each page result. |
+| `visual_assets` | Cropped filing evidence such as `photo` or `fingerprint_or_thumbprint` when detected. These are not biometric verification results. |
+
+Demo extraction can use profile-assisted recovery for known samples when raw OCR is noisy. The UI must still show evidence, warnings, and editable fields instead of presenting the output as fully automatic verification.
+
 ## Review
 
 | Method | Path | Purpose |

@@ -9,6 +9,7 @@ This guide gets a new engineer from clone to a working LipiOCR development envir
 - Node.js compatible with Next.js 16.
 - Docker and Docker Compose for production-shaped local runs.
 - Optional: Tesseract, PaddleOCR, or a Gemma vision endpoint for real OCR/ICR.
+- Optional for ML work: a GPU environment for PaddleOCR, handwriting OCR, YOLO/RT-DETR, or Gemma-style LoRA/QLoRA fine-tuning.
 
 The default local path uses mock OCR and in-memory storage so the product runs without GPU, Postgres, Redis, or MinIO.
 
@@ -20,6 +21,7 @@ The default local path uses mock OCR and in-memory storage so the product runs w
 | `backend/app/core/config.py` | Environment-driven settings. |
 | `backend/app/models.py` | Pydantic domain models for cases, documents, templates, review, and extraction. |
 | `backend/app/services/` | OCR, LipiCore reasoning, validation, extraction, integrations, templates, review, security. |
+| `backend/app/services/demo_extraction.py` | Demo extraction lab service for single-page/multipage uploads, document understanding, profile-assisted extraction, and visual evidence crops. |
 | `backend/app/repositories/` | Memory and SQL-backed persistence adapters. |
 | `backend/app/jobs/` | Async job queue models and runner. |
 | `backend/app/security/` | RBAC, session auth, tenant context, upload policy. |
@@ -75,6 +77,7 @@ Open:
 - Frontend: `http://localhost:3000`
 - API health: `http://localhost:8010/health`
 - API docs: `http://localhost:8010/docs`
+- Demo extraction lab: `http://localhost:3000/demo`
 
 Local defaults:
 
@@ -88,15 +91,16 @@ Local defaults:
 
 1. Open `http://localhost:3000`.
 2. Use the product home to enter the workspace.
-3. Go to `Cases` and create a case.
-4. Upload one or more documents under the selected case.
-5. Go to `Documents` for standalone packet/document processing.
-6. Inspect full-page OCR evidence, extracted fields, confidence, and review checklist.
-7. Correct fields in the review workflow.
-8. Run validation, verification, export profile, and audit views.
-9. Use `Templates` to draft or import a template for known document formats.
-10. Use `Admin` to inspect tenant settings, RBAC, compliance, and address dataset controls.
-11. Use `Integrations` to inspect REST, webhook, SFTP, and retry flows.
+3. Open `Demo` at `/demo` when you need to quickly test a Nepali citizenship, ASBA, or other KYC sample without creating a case.
+4. Go to `Cases` and create a case.
+5. Upload one or more documents under the selected case.
+6. Go to `Documents` for standalone packet/document processing.
+7. Inspect full-page OCR evidence, extracted fields, confidence, and review checklist.
+8. Correct fields in the review workflow.
+9. Run validation, verification, export profile, and audit views.
+10. Use `Templates` to draft or import a template for known document formats.
+11. Use `Admin` to inspect tenant settings, RBAC, compliance, and address dataset controls.
+12. Use `Integrations` to inspect REST, webhook, SFTP, and retry flows.
 
 ## Auth During Development
 
@@ -209,6 +213,56 @@ LIPIOCR_OCR_PROVIDER=tesseract make backend-dev
 LIPIOCR_OCR_PROVIDER=paddleocr make backend-dev
 ```
 
+## Demo Extraction Lab
+
+The demo lab is useful for tomorrow-style product demos and OCR debugging. It supports one file through `/api/demo/extract` and multipage uploads through `/api/demo/extract-pages`.
+
+Single-page API test:
+
+```bash
+curl -s -F "file=@/path/to/citizenship.jpg" \
+  -F prefer_lipicore=true \
+  http://localhost:8010/api/demo/extract
+```
+
+Multipage API test:
+
+```bash
+curl -s -F "files=@/path/to/front.jpg" \
+  -F "files=@/path/to/back.jpg" \
+  -F prefer_lipicore=true \
+  http://localhost:8010/api/demo/extract-pages
+```
+
+Expected response shape:
+
+- `document_type`
+- `document_understanding`
+- `summary`
+- `fields`
+- `raw_text`
+- `warnings`
+- `providers`
+- `pages` for multipage requests
+- `visual_assets` for crops such as photo and fingerprint/thumbprint when available
+
+Operator-facing UI should call the reasoning layer LipiCore. Keep provider and model names in diagnostics, configuration, or admin-only contexts.
+
+## Model Training Workflows
+
+Read [Model Training Strategy](./model-training-strategy.md) before adding training-data behavior.
+
+Training work should create approved datasets from the product:
+
+1. Save original files and page images.
+2. Save OCR evidence with boxes and confidence.
+3. Save reviewer-approved corrected fields.
+4. Save crop images for printed and handwritten text.
+5. Save boxes for photo, fingerprint/thumbprint, signature, stamp, table, label, and value regions.
+6. Export PaddleOCR, YOLO/COCO, LipiVision JSONL, and benchmark report formats.
+
+Do not train from raw OCR guesses. Only reviewer-approved or manually labeled values are ground truth.
+
 ## Nepali Name Lexicon
 
 The raw Nepali name dataset should stay outside Git. Build a compact local lexicon from an approved CSV:
@@ -302,6 +356,14 @@ Add a document intelligence behavior:
 3. Include audit reasons when confidence is repaired or values are derived.
 4. Keep uncertain fields reviewer-editable.
 5. Update docs if the behavior changes operator expectations.
+
+Add training-data capture:
+
+1. Add backend tests for approved correction export and rejected/unapproved sample exclusion.
+2. Keep real KYC files, raw personal names, and full addresses outside Git.
+3. Store original OCR value, corrected value, crop path, bounding box, confidence, source, and audit reason.
+4. Export standard formats without leaking tenant-private data across tenants.
+5. Update [Model Training Strategy](./model-training-strategy.md), [Architecture](./architecture.md), and [API Reference](./api-reference.md) when API shapes change.
 
 Add a new template capability:
 

@@ -7,8 +7,12 @@ import {
   AlertTriangle,
   Archive,
   BadgeCheck,
+  Bell,
   Boxes,
   BrainCircuit,
+  Building2,
+  CalendarDays,
+  ChevronDown,
   ClipboardCheck,
   Database,
   Download,
@@ -31,6 +35,7 @@ import {
   Plus,
   RefreshCcw,
   Route,
+  Search,
   SearchCheck,
   ShieldAlert,
   ShieldCheck,
@@ -55,6 +60,7 @@ import { computeTemplateDragBbox, type TemplateDragMode } from "../lib/template-
 import { AccuracyReport } from "./analytics/accuracy-report";
 import { LoginPanel } from "./auth/login-panel";
 import { LipiOcrLogo } from "./brand/lipiocr-logo";
+import { EnterpriseDashboard } from "./dashboard/enterprise-dashboard";
 import { TemplateStudioPanel } from "./templates/template-studio";
 
 import type {
@@ -113,70 +119,104 @@ const previewOverlayModes: { value: PreviewOverlayMode; label: string; icon: Rea
   { value: "evidence", label: "Highlights", icon: <Eye size={14} /> },
 ];
 
-const workspaceNav: { section: WorkspaceSection; href: string; label: string; description: string; icon: ReactNode }[] = [
+type WorkspaceNavGroup = "main" | "intelligence" | "administration";
+
+const workspaceNav: {
+  section: WorkspaceSection;
+  href: string;
+  label: string;
+  nepaliLabel: string;
+  description: string;
+  group: WorkspaceNavGroup;
+  icon: ReactNode;
+}[] = [
   {
     section: "command",
     href: "/dashboard",
-    label: "Dashboard",
-    description: "Workload, review status, and ready-to-export files",
+    label: "Operations Overview",
+    nepaliLabel: "अपरेसन अवलोकन",
+    description: "Operations flow, review pressure, export readiness, and Nepal intelligence coverage",
+    group: "main",
     icon: <Gauge size={16} />,
   },
   {
     section: "cases",
     href: "/cases",
     label: "Applications",
+    nepaliLabel: "केसहरू",
     description: "Customer onboarding files and status",
+    group: "main",
     icon: <Boxes size={16} />,
   },
   {
     section: "documents",
     href: "/documents",
-    label: "Documents",
+    label: "Uploads",
+    nepaliLabel: "अपलोडहरू",
     description: "Upload documents and correct extracted data",
+    group: "main",
     icon: <FileSearch size={16} />,
   },
   {
     section: "review",
     href: "/review",
     label: "Review",
+    nepaliLabel: "समिक्षा",
     description: "Human checks, corrections, and approvals",
+    group: "main",
     icon: <ClipboardCheck size={16} />,
-  },
-  {
-    section: "verification",
-    href: "/verification",
-    label: "Verify",
-    description: "Identity and compliance checks",
-    icon: <LockKeyhole size={16} />,
-  },
-  {
-    section: "templates",
-    href: "/templates",
-    label: "Formats",
-    description: "Reusable document formats and validation rules",
-    icon: <FileCog size={16} />,
   },
   {
     section: "integrations",
     href: "/integrations",
-    label: "Connect",
+    label: "Exports",
+    nepaliLabel: "निर्यात",
     description: "Export and handoff to institution systems",
+    group: "main",
     icon: <Plug size={16} />,
   },
   {
     section: "analytics",
     href: "/analytics",
     label: "Reports",
+    nepaliLabel: "प्रतिवेदनहरू",
     description: "Accuracy, corrections, and throughput",
+    group: "main",
     icon: <Activity size={16} />,
+  },
+  {
+    section: "templates",
+    href: "/templates",
+    label: "Document Intelligence",
+    nepaliLabel: "कागजात बुद्धिमत्ता",
+    description: "Reusable document formats and validation rules",
+    group: "intelligence",
+    icon: <FileCog size={16} />,
+  },
+  {
+    section: "verification",
+    href: "/verification",
+    label: "Data Validation",
+    nepaliLabel: "डेटा प्रमाणीकरण",
+    description: "Identity and compliance checks",
+    group: "intelligence",
+    icon: <LockKeyhole size={16} />,
   },
   {
     section: "admin",
     href: "/admin",
-    label: "Admin",
+    label: "Administration",
+    nepaliLabel: "प्रशासन",
     description: "Security, audit, tenant and deployment posture",
+    group: "administration",
     icon: <ShieldCheck size={16} />,
   },
+];
+
+const workspaceNavGroups: { key: WorkspaceNavGroup; label: string }[] = [
+  { key: "main", label: "Main" },
+  { key: "intelligence", label: "Intelligence" },
+  { key: "administration", label: "Administration" },
 ];
 
 function emptyResource<T>(): ResourceState<T> {
@@ -313,26 +353,6 @@ function extractionSourceLabel(field: ExtractedField) {
     return "LipiCore OCR";
   }
   return "LipiCore";
-}
-
-function providerLabel(provider: { key: string; label: string }) {
-  if (provider.key === "gemma_vision") {
-    return "LipiCore Vision";
-  }
-  if (provider.key === "mock") {
-    return "LipiCore Demo";
-  }
-  return "LipiCore OCR";
-}
-
-function providerBestFor(provider: { key: string; best_for: string }) {
-  if (provider.key === "gemma_vision") {
-    return "Printed and handwritten Nepali/English source text";
-  }
-  if (provider.key === "mock") {
-    return "Sample documents and offline walkthroughs";
-  }
-  return "Printed document recognition";
 }
 
 function sourceImageUrl(imageUri?: string | null) {
@@ -662,19 +682,19 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
   const isDocumentWorkspace = section === "documents";
   const showCaseIntake = section === "cases";
   const showDocumentIntake = false;
-  const showWorkQueue = ["command", "cases", "documents", "review", "verification", "integrations"].includes(section);
+  const showWorkQueue = ["cases", "documents", "review", "verification", "integrations"].includes(section);
   const showLeftRail = !isDocumentWorkspace && (showCaseIntake || showDocumentIntake || showWorkQueue);
   const showRightRail =
-    !isDocumentWorkspace && ["command", "cases", "documents", "review", "verification", "integrations", "admin"].includes(section);
-  const productionGridClass =
-    section === "command" ? "grid gap-4 xl:grid-cols-3" : section === "templates" ? "grid gap-4 xl:grid-cols-2" : "grid gap-4";
+    !isDocumentWorkspace && ["cases", "documents", "review", "verification", "integrations", "admin"].includes(section);
   const workspaceGridClass = showLeftRail
     ? showRightRail
-      ? "mx-auto grid max-w-[1720px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[300px_minmax(360px,1fr)_360px] 2xl:grid-cols-[340px_minmax(0,1fr)_420px]"
-      : "mx-auto grid max-w-[1480px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]"
+      ? "mx-auto grid max-w-[1720px] gap-4 px-4 py-4 sm:px-5 xl:grid-cols-[280px_minmax(340px,1fr)_340px] 2xl:grid-cols-[320px_minmax(0,1fr)_380px]"
+      : "mx-auto grid max-w-[1480px] gap-4 px-4 py-4 sm:px-5 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]"
     : showRightRail
-      ? "mx-auto grid max-w-[1480px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_420px]"
-      : "mx-auto grid max-w-[1180px] gap-5 px-4 py-5 sm:px-6";
+      ? "mx-auto grid max-w-[1480px] gap-4 px-4 py-4 sm:px-5 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_380px]"
+      : section === "command"
+        ? "mx-auto grid max-w-[1720px] gap-4 px-4 py-4 sm:px-5"
+        : "mx-auto grid max-w-[1180px] gap-4 px-4 py-4 sm:px-5";
 
   const summaryCounts = operations.data?.counts ?? {
     total_cases: cases.length,
@@ -2291,57 +2311,53 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="sticky top-0 z-30 border-b border-border-soft/80 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1800px] flex-col gap-4 px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <LipiOcrLogo className="mt-0.5 shrink-0" size="md" />
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Enterprise workspace</p>
-              <h1 className="mt-1 text-3xl font-extrabold text-slate-950">{activeNav.label}</h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{activeNav.description}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Pill icon={<Activity size={16} />} label={message} />
-            <Pill icon={<BrainCircuit size={16} />} label={aiHealth.data?.enabled ? "LipiCore active" : "LipiCore standby"} />
-            <button
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-cyan-200 hover:text-cyan-700 hover:shadow-[var(--shadow-lift)]"
-              onClick={refreshAll}
-              type="button"
-            >
-              <RefreshCcw size={16} />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {accessRequired || operatorSession ? (
-        <LoginPanel
-          onSignIn={handleOperatorSignIn}
-          onSignOut={handleOperatorSignOut}
-          session={operatorSession}
-          signingIn={busy}
+      <div className="min-h-screen xl:grid xl:grid-cols-[252px_minmax(0,1fr)]">
+        <WorkspaceSidebar
+          activeHref={activeHref}
+          activeSection={section}
+          platformReady={platform.data?.components?.some((component) => ["error", "failed", "blocked"].includes(component.status.toLowerCase())) ? "needs review" : "operational"}
+          reviewCount={summaryCounts.review_required}
         />
+        <div className="min-w-0">
+          <WorkspaceTopbar
+            aiLabel={aiHealth.data?.enabled ? "LipiCore active" : "LipiCore standby"}
+            busy={busy}
+            message={message}
+            onRefresh={refreshAll}
+            onSignOut={handleOperatorSignOut}
+            session={operatorSession}
+          />
+
+      {accessRequired && !operatorSession ? (
+        <div className="mx-auto max-w-[1800px] px-4 py-3 sm:px-5">
+          <LoginPanel
+            onSignIn={handleOperatorSignIn}
+            onSignOut={handleOperatorSignOut}
+            session={operatorSession}
+            signingIn={busy}
+          />
+        </div>
       ) : null}
 
-      <section className="border-b border-border-soft/80 bg-slate-50/70">
-        <div className="mx-auto max-w-[1800px] px-4 pt-4 sm:px-6">
-          <ModuleSwitcher activeHref={activeHref} activeSection={section} />
-        </div>
-        {!isDocumentWorkspace ? (
-          <div className="mx-auto grid max-w-[1800px] gap-3 px-4 py-4 sm:px-6 lg:grid-cols-5">
-            <Kpi icon={<Boxes size={18} />} label="Applications" value={summaryCounts.total_cases} />
-            <Kpi icon={<ClipboardCheck size={18} />} label="Review" value={summaryCounts.review_required} />
-            <Kpi icon={<ShieldAlert size={18} />} label="Exceptions" value={summaryCounts.exceptions} />
-            <Kpi icon={<BadgeCheck size={18} />} label="Approved" value={summaryCounts.approved} />
-            <Kpi icon={<FileText size={18} />} label="Documents" value={summaryCounts.documents} />
+      {section !== "command" ? (
+        <section className="border-b border-border-soft/80 bg-white">
+          <div className="mx-auto max-w-[1800px] space-y-3 px-4 py-4 sm:px-5">
+            <WorkspacePageHeader activeNav={activeNav} section={section} />
+            {!isDocumentWorkspace ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <Kpi icon={<Boxes size={18} />} label="Applications" value={summaryCounts.total_cases} />
+                <Kpi icon={<ClipboardCheck size={18} />} label="Review" value={summaryCounts.review_required} />
+                <Kpi icon={<ShieldAlert size={18} />} label="Exceptions" value={summaryCounts.exceptions} />
+                <Kpi icon={<BadgeCheck size={18} />} label="Approved" value={summaryCounts.approved} />
+                <Kpi icon={<FileText size={18} />} label="Documents" value={summaryCounts.documents} />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       {isDocumentWorkspace ? (
-        <section className="mx-auto max-w-[1800px] space-y-4 px-4 py-5 sm:px-6">
+        <section className="mx-auto max-w-[1800px] space-y-3 px-4 py-4 sm:px-5">
           <div className="inline-flex max-w-full rounded-full border border-slate-200 bg-white p-1 shadow-[var(--shadow-soft)]">
             {[
               { value: "application", label: "Application Documents", icon: <Boxes size={14} /> },
@@ -2350,7 +2366,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
               const active = documentLane === item.value;
               return (
                 <button
-                  className={`inline-flex h-9 min-w-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition ${
+                  className={`inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full px-3 text-xs font-bold transition ${
                     active
                       ? "bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
                       : "text-slate-600 hover:bg-cyan-50 hover:text-cyan-700"
@@ -3573,7 +3589,23 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
         ) : null}
 
         <section className="min-w-0 space-y-4">
-          {["command", "admin"].includes(section) ? (
+          {section === "command" ? (
+          <EnterpriseDashboard
+            accuracy={accuracy}
+            cases={cases}
+            exportProfiles={exportProfiles}
+            integrationOps={integrationOps}
+            jobs={jobQueue.data ?? []}
+            ocrPipeline={ocrPipeline}
+            operations={operations}
+            platform={platform}
+            selectedCase={selectedCase}
+            standaloneDocuments={standaloneDocuments}
+            templateStudio={templateStudio}
+          />
+          ) : null}
+
+          {section === "admin" ? (
           <Panel title="Platform Readiness" icon={<Gauge size={16} />}>
             <ResourceError resource={platform} />
             <div className="grid gap-2 lg:grid-cols-3">
@@ -4118,58 +4150,14 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
             />
           ) : null}
 
-          {["command", "analytics"].includes(section) ? (
+          {section === "analytics" ? (
           <Panel title="Production Pipeline" icon={<SearchCheck size={16} />}>
-            <div className={productionGridClass}>
-              {section === "analytics" ? (
-                <div className="space-y-3">
-                  <SectionLabel icon={<Gauge size={15} />} label="OCR Accuracy Program" />
-                  <ResourceError resource={accuracy} />
-                  <AccuracyReport accuracy={accuracy.data} />
-                </div>
-              ) : null}
-              {section !== "analytics" ? (
-              <div className="space-y-2">
-                <SectionLabel icon={<FileSearch size={15} />} label="Recognition: LipiCore" />
-                {(ocrPipeline.data?.providers ?? []).map((provider) => (
-                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={provider.key}>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{providerLabel(provider)}</p>
-                      <p className="mt-1 truncate text-slate-500">{providerBestFor(provider)}</p>
-                    </div>
-                    <StatusBadge status={provider.status} />
-                  </div>
-                ))}
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
+              <div className="space-y-3">
+                <SectionLabel icon={<Gauge size={15} />} label="OCR Accuracy Program" />
+                <ResourceError resource={accuracy} />
+                <AccuracyReport accuracy={accuracy.data} />
               </div>
-              ) : null}
-              {section !== "analytics" ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <SectionLabel icon={<FileCog size={15} />} label="Document Formats" />
-                  <ActionButton
-                    busy={activeAction === "configure-template"}
-                    disabled={busy || !selectedDocument || !primaryExtractionFields.length}
-                    icon={<FileCog size={14} />}
-                    onClick={configureTemplate}
-                  >
-                    Create Template
-                  </ActionButton>
-                </div>
-                <ResourceError resource={templateStudio} />
-                {(templateStudio.data?.templates ?? []).slice(0, 6).map((template) => (
-                  <div className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-slate-200 p-3 text-xs" key={template.document_type}>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{template.name}</p>
-                      <p className="mt-1 truncate text-slate-500">
-                        {template.field_count} fields · {labelize(template.mode)}
-                      </p>
-                    </div>
-                    <StatusBadge status={template.status} />
-                  </div>
-                ))}
-              </div>
-              ) : null}
-              {section !== "templates" ? (
               <div className="space-y-2">
                 <SectionLabel icon={<Gauge size={15} />} label={`Accuracy: ${accuracy.data?.correction_count ?? 0} corrections`} />
                 <ResourceError resource={accuracy} />
@@ -4191,7 +4179,6 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
                   </p>
                 )}
               </div>
-              ) : null}
             </div>
           </Panel>
           ) : null}
@@ -4200,7 +4187,7 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
         {showRightRail ? (
         <aside className="min-w-0 space-y-4">
           {["command", "cases", "documents"].includes(section) ? (
-          <Panel title="Decision Rail" icon={<Fingerprint size={16} />}>
+          <Panel title="Review Assistance" icon={<Fingerprint size={16} />}>
             <ResourceError resource={intelligence} />
             <div className="grid grid-cols-3 gap-2">
               <Info label="Ready" value={pct(readinessScore)} />
@@ -4505,6 +4492,8 @@ export function EnterpriseWorkspace({ section }: { section: WorkspaceSection }) 
         ) : null}
       </div>
       )}
+        </div>
+      </div>
     </main>
   );
 }
@@ -4574,48 +4563,241 @@ function SegmentedPicker({
 
 function Kpi({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
   return (
-    <div className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-[var(--shadow-soft)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]">
+    <div className="group rounded-xl border border-slate-200 bg-white p-3 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-500">{label}</span>
-        <span className="rounded-xl bg-cyan-50 p-2 text-cyan-700 group-hover:bg-cyan-100">{icon}</span>
+        <span className="text-xs font-semibold text-slate-500">{label}</span>
+        <span className="rounded-lg bg-cyan-50 p-1.5 text-cyan-700 group-hover:bg-cyan-100">{icon}</span>
       </div>
-      <p className="mt-3 font-mono text-3xl font-bold text-slate-950">{value}</p>
+      <p className="mt-2 font-mono text-xl font-bold text-slate-950">{value}</p>
     </div>
   );
 }
 
 function Pill({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <span className="inline-flex h-10 max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-4 font-semibold text-slate-700 shadow-[var(--shadow-soft)]">
+    <span className="hidden h-9 max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-[var(--shadow-soft)] 2xl:inline-flex">
       <span className="shrink-0 text-cyan-700">{icon}</span>
       <span className="truncate">{label}</span>
     </span>
   );
 }
 
-function ModuleSwitcher({ activeHref, activeSection }: { activeHref: string; activeSection: WorkspaceSection }) {
+function WorkspaceSidebar({
+  activeHref,
+  activeSection,
+  platformReady,
+  reviewCount,
+}: {
+  activeHref: string;
+  activeSection: WorkspaceSection;
+  platformReady: string;
+  reviewCount: number;
+}) {
   return (
-    <nav className="max-w-full rounded-[1.35rem] border border-slate-200 bg-white/95 p-2 shadow-[var(--shadow-soft)]">
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {workspaceNav.map((item) => {
-          const active = item.href === activeHref || item.section === activeSection;
-          return (
-            <Link
-              className={`group inline-flex min-w-fit items-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-bold ${
-                active
-                  ? "bg-gradient-to-r from-cyan-600 to-teal-500 text-white shadow-[var(--shadow-button)]"
-                  : "text-slate-600 hover:-translate-y-0.5 hover:bg-cyan-50 hover:text-cyan-700"
-              }`}
-              href={item.href}
-              key={item.section}
-            >
-              <span className={active ? "text-white" : "text-slate-400 group-hover:text-cyan-700"}>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+    <aside className="border-b border-slate-200 bg-white xl:sticky xl:top-0 xl:h-screen xl:border-b-0 xl:border-r">
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="border-b border-slate-100 px-4 py-4">
+          <LipiOcrLogo size="md" />
+        </div>
+        <nav className="min-h-0 flex-1 overflow-x-auto px-2.5 py-3 xl:overflow-y-auto">
+          <div className="flex gap-2 xl:block xl:space-y-4">
+            {workspaceNavGroups.map((group) => {
+              const items = workspaceNav.filter((item) => item.group === group.key);
+              return (
+                <div className="min-w-[220px] xl:min-w-0" key={group.key}>
+                  <p className="mb-1.5 px-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">{group.label}</p>
+                  <div className="space-y-1">
+                    {items.map((item) => (
+                      <WorkspaceNavLink
+                        active={item.href === activeHref || item.section === activeSection}
+                        badge={item.section === "review" && reviewCount ? `${reviewCount}` : undefined}
+                        item={item}
+                        key={item.section}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </nav>
+        <div className="hidden border-t border-slate-100 p-3 xl:block">
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="rounded-xl bg-cyan-50 p-1.5 text-cyan-700">
+                <ShieldCheck size={20} />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-extrabold text-cyan-800">Platform Status</span>
+                <span className="block truncate text-xs font-semibold text-slate-500">प्लेटफर्म स्थिति</span>
+              </span>
+            </div>
+            <div className="mt-2.5 flex items-center justify-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[11px] font-extrabold text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              {labelize(platformReady) || "Operational"}
+            </div>
+          </div>
+        </div>
       </div>
-    </nav>
+    </aside>
+  );
+}
+
+function WorkspaceNavLink({
+  active,
+  badge,
+  item,
+}: {
+  active: boolean;
+  badge?: string;
+  item: (typeof workspaceNav)[number];
+}) {
+  return (
+    <Link
+      className={`group flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-bold ${
+        active
+          ? "bg-cyan-50 text-cyan-800 shadow-[inset_2px_0_0_rgba(14,165,168,0.9)]"
+          : "text-slate-700 hover:bg-slate-50 hover:text-cyan-800"
+      }`}
+      href={item.href}
+    >
+      <span className={active ? "text-cyan-700" : "text-slate-500 group-hover:text-cyan-700"}>{item.icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{item.label}</span>
+        <span className="block truncate text-[10px] font-semibold text-slate-500">{item.nepaliLabel}</span>
+      </span>
+      {badge ? (
+        <span className="rounded-full bg-cyan-100 px-1.5 py-0.5 font-mono text-[10px] font-extrabold text-cyan-800">{badge}</span>
+      ) : null}
+    </Link>
+  );
+}
+
+function WorkspaceTopbar({
+  aiLabel,
+  busy,
+  message,
+  onRefresh,
+  onSignOut,
+  session,
+}: {
+  aiLabel: string;
+  busy: boolean;
+  message: string;
+  onRefresh: () => void;
+  onSignOut: () => void;
+  session: OperatorPrincipal | null;
+}) {
+  return (
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-[1800px] flex-col gap-2.5 px-4 py-2.5 sm:px-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="inline-flex h-10 w-[160px] shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 shadow-sm">
+            <span className="rounded-md bg-slate-50 p-1.5 text-slate-700">
+              <Building2 size={16} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-extrabold text-slate-950">Nabil Bank Ltd.</span>
+              <span className="block truncate text-[10px] font-semibold text-slate-500">नबिल बैंक लिमिटेड</span>
+            </span>
+          </div>
+          <div className="inline-flex h-10 w-[160px] shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 shadow-sm">
+            <span className="rounded-md bg-slate-50 p-1.5 text-slate-700">
+              <CalendarDays size={16} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[10px] font-bold text-slate-500">Date Range</span>
+              <span className="block truncate text-xs font-extrabold text-slate-950">May 18 - May 24, 2025</span>
+            </span>
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-nowrap items-center gap-2 lg:justify-end">
+          <label className="relative min-w-[190px] flex-1 md:w-[240px] md:flex-none lg:w-[300px] 2xl:w-[390px]">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <Search size={17} />
+            </span>
+            <input
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-11 text-xs font-semibold text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+              placeholder="Search cases, documents, IDs..."
+              type="search"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
+              ⌘ K
+            </span>
+          </label>
+          <Pill icon={<Activity size={15} />} label={message} />
+          <Pill icon={<BrainCircuit size={15} />} label={aiLabel} />
+          <button
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-cyan-200 hover:text-cyan-700"
+            type="button"
+          >
+            <Bell size={18} />
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-extrabold text-white">
+              3
+            </span>
+          </button>
+          <button
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:border-cyan-200 hover:text-cyan-700"
+            onClick={onRefresh}
+            type="button"
+          >
+            <RefreshCcw className={busy ? "animate-spin" : ""} size={15} />
+            Refresh
+          </button>
+          <button
+            className="inline-flex h-10 min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-2 text-left shadow-sm hover:border-cyan-200"
+            onClick={session ? onSignOut : undefined}
+            type="button"
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-extrabold text-slate-700">
+              {session?.user_id?.slice(0, 2).toUpperCase() ?? "AS"}
+            </span>
+            <span className="hidden min-w-0 xl:block">
+              <span className="block truncate text-xs font-extrabold text-slate-950">{session?.user_id ?? "Aarav Shrestha"}</span>
+              <span className="block truncate text-[10px] font-semibold text-slate-500">{labelize(session?.role ?? "Operations Manager")}</span>
+            </span>
+            <ChevronDown className="hidden text-slate-400 xl:block" size={15} />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function WorkspacePageHeader({
+  activeNav,
+  section,
+}: {
+  activeNav: (typeof workspaceNav)[number];
+  section: WorkspaceSection;
+}) {
+  const action =
+    section === "documents"
+      ? { label: "Upload New Batch", icon: <Upload size={15} /> }
+      : section === "integrations"
+        ? { label: "Export New", icon: <Download size={15} /> }
+        : section === "templates"
+          ? { label: "Customize View", icon: <FileCog size={15} /> }
+          : section === "admin"
+            ? { label: "Export Logs", icon: <Download size={15} /> }
+            : null;
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <span className="mt-0.5 rounded-xl bg-cyan-50 p-2 text-cyan-700">{activeNav.icon}</span>
+        <span className="min-w-0">
+          <h1 className="truncate text-xl font-extrabold text-slate-950">{activeNav.label}</h1>
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{activeNav.nepaliLabel}</p>
+          <p className="mt-1.5 max-w-2xl text-xs leading-5 text-slate-600">{activeNav.description}</p>
+        </span>
+      </div>
+      {action ? (
+        <button className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-cyan-600 bg-cyan-600 px-3.5 text-xs font-extrabold text-white shadow-[var(--shadow-button)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]" type="button">
+          {action.icon}
+          {action.label}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

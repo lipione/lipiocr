@@ -26,6 +26,7 @@ flowchart TD
     Extraction --> Review["Human Review + Correction"]
     Review --> Validation["Validation + Verification Adapters"]
     Validation --> Export["JSON/API/Webhook/SFTP Export"]
+    Review --> Training["Approved Training Data"]
     API --> Reference["Nepal Location, Name, Address Evidence"]
     API --> Audit["Audit + Compliance Reports"]
     Cases --> DB["Memory or PostgreSQL"]
@@ -59,6 +60,7 @@ LipiOCR handles this with layered extraction:
 | `app/security/` | RBAC, sessions, tenant context, upload limits, signed previews. |
 | `app/services/ocr.py` | Mock, Tesseract, PaddleOCR, and Gemma vision OCR providers. |
 | `app/services/gemma.py` | OpenAI-compatible LipiCore client wrapper. |
+| `app/services/demo_extraction.py` | Demo extraction lab logic for single-page and multipage samples, document understanding, profile-assisted extraction, OCR evidence, and visual evidence crops. |
 | `app/services/document_intelligence.py` | Document classification, bilingual normalization, field pairing, confidence repair. |
 | `app/services/enterprise_extraction.py` | Enterprise document processing orchestration. |
 | `app/services/templates.py` | Built-in and coordinate-template extraction support. |
@@ -77,6 +79,7 @@ LipiOCR handles this with layered extraction:
 | Route | Purpose |
 | --- | --- |
 | `/` | Product home and product intro. |
+| `/demo` | Demo extraction lab for single-page and multipage uploads, document understanding, OCR evidence, bilingual fields, and visual evidence crops. |
 | `/dashboard` | Command center for platform status and work queues. |
 | `/cases` | Case intake, selected case detail, review, validation, verification, export. |
 | `/documents` | Standalone or applicant-linked document processing and full-page evidence. |
@@ -133,6 +136,36 @@ Confidence repair must not silently overwrite OCR. A repaired field should retai
 - Source field or source document used.
 - Confidence before and after repair.
 - Audit reason.
+
+## OCR And Vision Model Strategy
+
+LipiOCR should use a layered model family instead of one model that tries to do everything.
+
+| Layer | Recommended training direction | Responsibility |
+| --- | --- | --- |
+| Printed OCR | Fine-tune PaddleOCR | Read Nepali, English, numbers, dates, IDs, and form text. |
+| Handwriting OCR/ICR | Fine-tune TrOCR or PaddleOCR recognition on line crops | Read handwritten names, addresses, dates, phone numbers, and financial form entries. |
+| Region detection | Train YOLO/RT-DETR style detector | Locate photo, fingerprint/thumbprint, signature, stamp, tables, labels, and values. |
+| Document understanding | Fine-tune Gemma-style vision model as LipiVision | Classify document type, understand layout, map fields, detect front/back/combined pages, and produce structured JSON proposals. |
+| Verification and correction | LipiCore plus deterministic reference stores | Reconcile bilingual fields, normalize BS/AD dates, match Nepal addresses, suggest name corrections, and preserve audit reasons. |
+
+Gemma vision is the reasoning and document-understanding layer, not the only OCR engine. Production OCR should remain measurable through field-level benchmarks and per-provider comparison.
+
+See [Model Training Strategy](./model-training-strategy.md) for dataset structure, export formats, and training governance.
+
+## Training Data Feedback Loop
+
+Reviewer approval is the start of the model-improvement loop. Approved corrections should produce training artifacts:
+
+1. Original file and rendered page images.
+2. Preprocessed images.
+3. OCR boxes, text, confidence, and reading order.
+4. Corrected field values and final normalized JSON.
+5. Field crops for printed and handwritten OCR.
+6. Region boxes for photos, fingerprints/thumbprints, signatures, stamps, tables, labels, and values.
+7. Correction reasons and evidence sources.
+
+Only reviewer-approved or manually labeled values can become ground truth. Raw OCR guesses must never be exported as training truth without approval.
 
 ## Reference Intelligence
 

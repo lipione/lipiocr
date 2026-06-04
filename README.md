@@ -35,6 +35,8 @@ Key references:
 
 - [Developer Onboarding](./docs/developer-onboarding.md)
 - [Architecture](./docs/architecture.md)
+- [Model Training Strategy](./docs/model-training-strategy.md)
+- [Interface System](./.interface-design/system.md)
 - [API Reference](./docs/api-reference.md)
 - [Configuration](./docs/configuration.md)
 - [Deployment](./docs/deployment.md)
@@ -78,8 +80,30 @@ Open:
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:8010`
 - API docs: `http://localhost:8010/docs`
+- Demo extraction lab: `http://localhost:3000/demo`
 
 Local defaults use memory storage, local uploads, mock OCR, disabled auth, and disabled LipiCore remote calls so the app runs without infrastructure. Mock mode is for UI, workflow, and test development only. Real pilots must configure an approved OCR/LipiCore provider and benchmark it against institution-approved samples.
+
+## Demo Extraction Lab
+
+The `/demo` route is the fastest way to test the product story before a pilot meeting. It accepts single-page or multipage uploads, runs the demo extraction API, shows a scanning overlay, displays document understanding, keeps raw OCR evidence, exposes editable extracted fields, shows bilingual normalization where available, and includes visual evidence crops such as photo and fingerprint/thumbprint regions when detected.
+
+Local test:
+
+```bash
+curl -F "file=@/path/to/sample.jpg" \
+  -F prefer_lipicore=true \
+  http://localhost:8010/api/demo/extract
+```
+
+Multipage test:
+
+```bash
+curl -F "files=@/path/to/page-1.jpg" \
+  -F "files=@/path/to/page-2.jpg" \
+  -F prefer_lipicore=true \
+  http://localhost:8010/api/demo/extract-pages
+```
 
 ## Verification
 
@@ -123,6 +147,12 @@ cd backend
 ```
 
 Then run with `LIPIOCR_OCR_PROVIDER=tesseract` or `LIPIOCR_OCR_PROVIDER=paddleocr`.
+
+## OCR And Vision Training Direction
+
+LipiOCR should train a model family, not one all-purpose model. Fine-tuned PaddleOCR should be the primary trainable OCR layer for printed Nepali/English. A separate handwriting recognizer should be trained on reviewer-approved line crops. A Gemma-style vision model should be fine-tuned as LipiVision for document understanding, field mapping, bilingual reasoning, and structured JSON extraction. LipiCore remains the verifier and correction layer for Nepal names, addresses, BS/AD dates, cross-document reconciliation, and reviewer-safe confidence repair.
+
+See [Model Training Strategy](./docs/model-training-strategy.md).
 
 ## Auth And API Keys
 
@@ -201,6 +231,7 @@ Still requires institution-specific production integration:
 - Real National ID/PAN/VAT/AML/liveness/CBS/LOS/DMS credentials.
 - Real Nepali document accuracy benchmark dataset.
 - Institution-approved address/name reference datasets and review governance.
+- Reviewer-approved training dataset capture, export, model registry, and benchmark governance.
 - External worker orchestration and production migration policy.
 - Per-tenant encryption key management and observability stack.
 

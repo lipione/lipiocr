@@ -7,6 +7,8 @@ import time
 import uuid
 from typing import Dict, List, Optional
 
+from PIL import Image, ImageOps
+
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -33,6 +35,7 @@ from app.models import (
 )
 from app.routers import compliance_router, health_router, integration_manifest_router, templates_router, tenants_router
 from app.services.calendar_intelligence import apply_calendar_intelligence
+from app.services.demo_extraction import extract_demo_from_upload
 from app.services.enterprise_extraction import process_enterprise_document
 from app.security.rbac import ROLE_PERMISSIONS, can_manage_system_templates
 from app.security.sessions import SessionPrincipal, session_store_from_settings
@@ -59,6 +62,19 @@ app.include_router(compliance_router)
 
 
 IMAGE_SUFFIXES = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+MIME_BY_SUFFIX = {
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".txt": "text/plain",
+    ".webp": "image/webp",
+}
 
 
 def _is_previewable_image(filename: str) -> bool:
@@ -108,8 +124,64 @@ def _upload_image_uri(stored_name: str) -> str:
     return _signed_upload_image_uri(stored_name)
 
 
+def _save_crop_asset(stored_path: Path, bbox: list[int], label: str) -> Optional[dict[str, object]]:
+    try:
+        image = ImageOps.exif_transpose(Image.open(stored_path)).convert("RGB")
+    except Exception:
+        return None
+
+    width, height = image.size
+    x1, y1, x2, y2 = bbox
+    x1 = max(0, min(width - 1, x1))
+    y1 = max(0, min(height - 1, y1))
+    x2 = max(x1 + 1, min(width, x2))
+    y2 = max(y1 + 1, min(height, y2))
+    crop = image.crop((x1, y1, x2, y2))
+    asset_name = f"{uuid.uuid4().hex}.jpg"
+    asset_path = UPLOAD_DIR / asset_name
+    crop.save(asset_path, format="JPEG", quality=90)
+    return {
+        "kind": label,
+        "label": "Photo" if label == "photo" else "Fingerprint / Thumbprint",
+        "image_uri": _upload_image_uri(asset_name),
+        "bbox": [x1, y1, x2, y2],
+        "confidence": 0.82 if label == "photo" else 0.68,
+        "source": "citizenship_layout_asset_crop",
+        "review_note": "Cropped for reviewer filing only; no biometric verification is performed.",
+    }
+
+
+def _attach_demo_visual_assets(result: dict, stored_path: Path) -> dict:
+    if result.get("document_type") != DocumentType.citizenship.value or not _is_previewable_image(stored_path.name):
+        result.setdefault("visual_assets", [])
+        return result
+    try:
+        with Image.open(stored_path) as image:
+            width, height = image.size
+    except Exception:
+        result.setdefault("visual_assets", [])
+        return result
+
+    # Old Nepali citizenship scans usually place the portrait on the left lower half,
+    # with a thumbprint/fingerprint mark beneath or over the portrait area.
+    crops = [
+        ("photo", [int(width * 0.03), int(height * 0.42), int(width * 0.29), int(height * 0.84)]),
+        ("fingerprint_or_thumbprint", [int(width * 0.05), int(height * 0.79), int(width * 0.15), int(height * 0.96)]),
+    ]
+    assets = []
+    for label, bbox in crops:
+        asset = _save_crop_asset(stored_path, bbox, label)
+        if asset:
+            assets.append(asset)
+    result["visual_assets"] = assets
+    return result
+
+
 def _validate_upload(filename: Optional[str], content_type: Optional[str], contents: bytes) -> None:
-    validate_upload_policy(filename, content_type, contents, upload_policy_from_settings(settings))
+    normalized_type = (content_type or "").split(";")[0].strip().lower()
+    if not normalized_type or normalized_type == "application/octet-stream":
+        normalized_type = MIME_BY_SUFFIX.get(Path(filename or "").suffix.lower(), normalized_type)
+    validate_upload_policy(filename, normalized_type, contents, upload_policy_from_settings(settings))
 
 
 def _principal_payload(principal) -> Dict[str, Optional[str]]:
@@ -184,6 +256,98 @@ def preview_upload(stored_name: str, http_request: Request, exp: Optional[str] =
     if not stored_path.exists() or not stored_path.is_file():
         raise HTTPException(status_code=404, detail="Upload not found")
     return FileResponse(stored_path)
+
+
+@app.post("/api/demo/extract")
+async def extract_demo_document(
+    http_request: Request,
+    file: UploadFile = File(...),
+    prefer_lipicore: bool = Form(True),
+):
+    if settings.environment == "production" and settings.api_auth_enabled:
+        require_permission(settings, http_request, "upload_document")
+
+    contents = await file.read()
+    _validate_upload(file.filename, file.content_type, contents)
+    stored_path = _stored_upload_path(file.filename)
+    stored_path.write_bytes(contents)
+
+    result = extract_demo_from_upload(
+        content=contents,
+        filename=file.filename or stored_path.name,
+        content_type=file.content_type or "application/octet-stream",
+        source_path=stored_path,
+        prefer_lipicore=prefer_lipicore,
+        settings=settings,
+    )
+    if _is_previewable_image(stored_path.name):
+        result["image_uri"] = _upload_image_uri(stored_path.name)
+    _attach_demo_visual_assets(result, stored_path)
+    return result
+
+
+@app.post("/api/demo/extract-pages")
+async def extract_demo_document_pages(
+    http_request: Request,
+    files: List[UploadFile] = File(...),
+    prefer_lipicore: bool = Form(True),
+):
+    if settings.environment == "production" and settings.api_auth_enabled:
+        require_permission(settings, http_request, "upload_document")
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required")
+    if len(files) > 12:
+        raise HTTPException(status_code=400, detail="Demo upload supports up to 12 pages")
+
+    pages: list[dict] = []
+    for page_index, upload in enumerate(files, start=1):
+        contents = await upload.read()
+        _validate_upload(upload.filename, upload.content_type, contents)
+        stored_path = _stored_upload_path(upload.filename)
+        stored_path.write_bytes(contents)
+        page_result = extract_demo_from_upload(
+            content=contents,
+            filename=upload.filename or stored_path.name,
+            content_type=upload.content_type or "application/octet-stream",
+            source_path=stored_path,
+            prefer_lipicore=prefer_lipicore,
+            settings=settings,
+        )
+        page_result["page_number"] = page_index
+        if _is_previewable_image(stored_path.name):
+            page_result["image_uri"] = _upload_image_uri(stored_path.name)
+        _attach_demo_visual_assets(page_result, stored_path)
+        pages.append(page_result)
+
+    structured_fields = [
+        {**field, "page_number": page["page_number"], "key": f"p{page['page_number']}_{field['key']}"}
+        for page in pages
+        for field in page.get("fields", [])
+        if not str(field.get("key", "")).startswith("ocr_line_")
+    ]
+    ocr_lines = [
+        {**field, "page_number": page["page_number"], "key": f"p{page['page_number']}_{field['key']}"}
+        for page in pages
+        for field in page.get("fields", [])
+        if str(field.get("key", "")).startswith("ocr_line_")
+    ]
+    confidences = [float(page.get("overall_confidence") or 0) for page in pages]
+    document_types = {str(page.get("document_type") or "unknown") for page in pages}
+    first_page = pages[0]
+    return {
+        "status": "completed",
+        "filename": f"{len(pages)} page upload",
+        "document_type": first_page.get("document_type") if len(document_types) == 1 else "multi_document",
+        "document_understanding": first_page.get("document_understanding"),
+        "summary": f"Processed {len(pages)} page(s) with {len(structured_fields)} structured field(s).",
+        "overall_confidence": round(sum(confidences) / len(confidences), 2) if confidences else 0,
+        "fields": structured_fields + ocr_lines,
+        "raw_text": "\n\n".join(str(page.get("raw_text") or "") for page in pages),
+        "warnings": [warning for page in pages for warning in page.get("warnings", [])],
+        "providers": sorted({provider for page in pages for provider in page.get("providers", [])}),
+        "pages": pages,
+        "visual_assets": [asset for page in pages for asset in page.get("visual_assets", [])],
+    }
 
 
 def _attach_upload_image_uris(case: KycCase) -> KycCase:

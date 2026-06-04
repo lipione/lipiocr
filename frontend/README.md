@@ -18,6 +18,7 @@ Read `AGENTS.md` before changing Next.js conventions. This project uses a newer 
 | Route | Purpose |
 | --- | --- |
 | `/` | Product intro and feature overview. |
+| `/demo` | Fast extraction demo for single-page and multipage Nepali KYC samples. |
 | `/dashboard` | Operations command center. |
 | `/cases` | Case intake, selected case workflow, review, export, audit context. |
 | `/documents` | Standalone and linked document processing. |
@@ -89,6 +90,7 @@ make test
 
 ## UI Guidelines
 
+- Read `../.interface-design/system.md` before changing dashboard, review, template, intelligence, integration, or admin surfaces.
 - Keep workflow screens task-focused and dense enough for repeated operations.
 - Avoid hiding core review actions behind dropdowns.
 - Keep split-view document evidence and editable extracted data close together.
@@ -98,6 +100,22 @@ make test
 - Use existing workspace components and route patterns before creating new layout primitives.
 - Use icons for compact actions where they are familiar, with accessible labels/tooltips.
 - Keep model/provider names out of operator-facing UI; use product language such as LipiCore.
+- Use `/demo` for direct sample testing, but keep it honest: show raw OCR evidence, editable fields, bilingual values, document understanding, warnings, and visual evidence crops when the backend returns them.
+
+## Demo Extraction UX
+
+The demo page should make the product understandable in one flow:
+
+- Upload one or more pages.
+- Show scan/extraction animation over the active document preview while processing.
+- Explain the detected document type and confidence in product language.
+- Show structured fields as editable reviewer-safe values.
+- Preserve raw OCR evidence for audit/debugging.
+- Show bilingual Nepali/English values separately when available.
+- Show photo and fingerprint/thumbprint crops as filing evidence, not biometric verification.
+- Support multipage page switching without losing the aggregate extracted fields.
+
+Avoid claims of perfect handwriting, fraud detection, signature verification, or registry verification unless a configured backend adapter actually returned that result.
 
 ## Template Studio UX
 
