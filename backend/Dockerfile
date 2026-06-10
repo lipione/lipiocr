@@ -10,6 +10,10 @@ ARG INSTALL_OCR_EXTRAS=false
 COPY backend/pyproject.toml ./pyproject.toml
 COPY backend/app ./app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libgl1 libglib2.0-0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m pip install --upgrade pip \
     && if [ "$INSTALL_OCR_EXTRAS" = "true" ]; then \
         python -m pip install --no-cache-dir '.[ocr]'; \
