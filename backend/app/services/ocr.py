@@ -462,20 +462,43 @@ class TesseractOcrProvider:
 class PaddleOcrProvider:
     name = "paddleocr"
 
-    def read(self, file_path: Path, document_type: DocumentType) -> List[OcrObservation]:
+    def __init__(self, settings: Optional[Settings] = None) -> None:
+        self.settings = settings or Settings()
+        self._engine = None
+
+    def _get_engine(self):
+        if self._engine is not None:
+            return self._engine
         try:
             from paddleocr import PaddleOCR
         except ImportError as exc:
             raise RuntimeError("Install backend optional dependency group: pip install -e '.[ocr]'") from exc
 
-        engine = PaddleOCR(use_angle_cls=True, lang="en")
+        self._engine = PaddleOCR(use_angle_cls=True, lang=self.settings.paddle_lang)
+        return self._engine
+
+    def read(self, file_path: Path, document_type: DocumentType) -> List[OcrObservation]:
+        engine = self._get_engine()
         result = engine.ocr(str(file_path), cls=True)
         observations: List[OcrObservation] = []
         for page in result or []:
             for item in page or []:
                 text = item[1][0]
                 confidence = float(item[1][1])
-                observations.append(OcrObservation(field_key="raw_text", text=text, confidence=confidence))
+                bbox = item[0] if item and len(item) > 0 else None
+                observation = OcrObservation(
+                    field_key="raw_text",
+                    text=text,
+                    confidence=confidence,
+                    block_type="text",
+                    language=self.settings.paddle_lang,
+                )
+                if isinstance(bbox, list) and len(bbox) == 4:
+                    xs = [point[0] for point in bbox if isinstance(point, list) and len(point) >= 2]
+                    ys = [point[1] for point in bbox if isinstance(point, list) and len(point) >= 2]
+                    if xs and ys:
+                        observation["bbox"] = [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))]
+                observations.append(observation)
         return observations
 
 
@@ -547,13 +570,15 @@ class GemmaVisionOcrProvider:
 
 
 def get_ocr_provider(name: str = "mock", *, settings: Optional[Settings] = None) -> OcrProvider:
+    active_settings = settings or Settings()
     providers = {
         "mock": MockOcrProvider,
         "tesseract": TesseractOcrProvider,
-        "paddleocr": PaddleOcrProvider,
     }
     if name in {"gemma_vision", "gemma-vision", "gemma"}:
-        return GemmaVisionOcrProvider(settings or Settings())
+        return GemmaVisionOcrProvider(active_settings)
+    if name in {"paddleocr", "paddle", "paddle_gemma", "paddle-gemma"}:
+        return PaddleOcrProvider(active_settings)
     provider_cls = providers.get(name)
     if provider_cls is None:
         raise ValueError(f"Unsupported OCR provider: {name}")

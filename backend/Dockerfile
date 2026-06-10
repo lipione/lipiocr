@@ -5,11 +5,17 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+ARG INSTALL_OCR_EXTRAS=false
+
 COPY backend/pyproject.toml ./pyproject.toml
 COPY backend/app ./app
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-cache-dir .
+    && if [ "$INSTALL_OCR_EXTRAS" = "true" ]; then \
+        python -m pip install --no-cache-dir '.[ocr]'; \
+    else \
+        python -m pip install --no-cache-dir .; \
+    fi
 
 RUN mkdir -p /app/storage/uploads
 

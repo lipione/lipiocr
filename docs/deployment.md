@@ -58,6 +58,25 @@ Before production:
 - Keep MinIO and Postgres private.
 - Put TLS and access control in front of the stack.
 
+### PaddleOCR + Gemma Reasoning Deployment
+
+For a deployment where PaddleOCR performs page OCR and a Gemma/OpenAI-compatible endpoint performs LipiCore text reasoning, configure:
+
+```bash
+LIPIOCR_INSTALL_OCR_EXTRAS=true
+LIPIOCR_OCR_PROVIDER=paddle_gemma
+LIPIOCR_PADDLE_LANG=en
+
+LIPIOCR_GEMMA_ENABLED=true
+LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8002/v1
+LIPIOCR_GEMMA_MODEL=gemma-4
+LIPIOCR_GEMMA_REQUIRE_JSON=true
+```
+
+`paddle_gemma` selects the PaddleOCR provider for OCR. Gemma remains enabled separately as LipiCore reasoning over OCR evidence. Do not point `LIPIOCR_OCR_PROVIDER=gemma_vision` at a text-only Gemma model; that mode expects an image-capable chat endpoint.
+
+If a fine-tuned Gemma LoRA is available, serve it behind the OpenAI-compatible endpoint first, then update `LIPIOCR_GEMMA_MODEL` to the served model name after `/v1/models` confirms it is live.
+
 ## Persistent Data
 
 Production deployments must treat these as durable application data:

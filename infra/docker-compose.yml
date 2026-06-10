@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+      args:
+        INSTALL_OCR_EXTRAS: ${LIPIOCR_INSTALL_OCR_EXTRAS:-false}
     container_name: lipiocr-api
     environment:
       LIPIOCR_ENVIRONMENT: ${LIPIOCR_ENVIRONMENT:-production}
@@ -11,6 +13,7 @@ services:
       LIPIOCR_REPOSITORY_BACKEND: ${LIPIOCR_REPOSITORY_BACKEND:-sql}
       LIPIOCR_STORAGE_BACKEND: ${LIPIOCR_STORAGE_BACKEND:-s3}
       LIPIOCR_OCR_PROVIDER: ${LIPIOCR_OCR_PROVIDER:-gemma_vision}
+      LIPIOCR_PADDLE_LANG: ${LIPIOCR_PADDLE_LANG:-en}
       LIPIOCR_GEMMA_ENABLED: ${LIPIOCR_GEMMA_ENABLED:-true}
       LIPIOCR_GEMMA_API_BASE: ${LIPIOCR_GEMMA_API_BASE:-http://host.docker.internal:8003/v1}
       LIPIOCR_GEMMA_MODEL: ${LIPIOCR_GEMMA_MODEL:-gemma-4-26b-4bit}

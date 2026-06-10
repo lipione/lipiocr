@@ -1,6 +1,12 @@
 from app.core.config import Settings
 from app.models import DocumentType
-from app.services.ocr import GemmaVisionOcrProvider, get_ocr_provider, observations_from_tesseract_data, parse_gemma_ocr_content
+from app.services.ocr import (
+    GemmaVisionOcrProvider,
+    PaddleOcrProvider,
+    get_ocr_provider,
+    observations_from_tesseract_data,
+    parse_gemma_ocr_content,
+)
 
 
 def test_parse_gemma_ocr_content_preserves_nepali_handwriting_metadata():
@@ -117,6 +123,24 @@ def test_get_ocr_provider_supports_remote_gemma_vision():
     assert isinstance(provider, GemmaVisionOcrProvider)
     assert provider.name == "gemma_vision"
     assert provider.settings.gemma_model == "gemma-4-26b-4bit"
+
+
+def test_get_ocr_provider_supports_paddle_gemma_alias_with_configured_language():
+    provider = get_ocr_provider(
+        "paddle_gemma",
+        settings=Settings(
+            ocr_provider="paddle_gemma",
+            paddle_lang="en",
+            gemma_enabled=True,
+            gemma_api_base="http://127.0.0.1:8002/v1",
+            gemma_model="gemma-4",
+        ),
+    )
+
+    assert isinstance(provider, PaddleOcrProvider)
+    assert provider.name == "paddleocr"
+    assert provider.settings.paddle_lang == "en"
+    assert provider.settings.gemma_model == "gemma-4"
 
 
 def test_gemma_vision_provider_builds_multimodal_request(tmp_path):

@@ -1234,6 +1234,13 @@ def _read_lipicore_vision(source_path: Path, document_type: DocumentType, settin
     return "\n".join(lines), []
 
 
+def _read_configured_ocr_provider(source_path: Path, document_type: DocumentType, settings: Settings) -> tuple[str, list[str], str]:
+    provider = get_ocr_provider(settings.ocr_provider, settings=settings)
+    observations = provider.read(source_path, document_type)
+    lines = [str(observation.get("text") or "").strip() for observation in observations if str(observation.get("text") or "").strip()]
+    return "\n".join(lines), [], provider.name
+
+
 def extract_demo_from_upload(
     *,
     content: bytes,
@@ -1248,7 +1255,13 @@ def extract_demo_from_upload(
     text = ""
     providers: list[str] = []
 
-    if prefer_lipicore and source_path and (active_settings.gemma_enabled or active_settings.ocr_provider in {"gemma", "gemma_vision", "gemma-vision"}):
+    active_ocr_provider = active_settings.ocr_provider.lower().replace("-", "_")
+    if (
+        prefer_lipicore
+        and source_path
+        and (active_settings.gemma_enabled or active_ocr_provider in {"gemma", "gemma_vision"})
+        and active_ocr_provider not in {"paddleocr", "paddle", "paddle_gemma"}
+    ):
         try:
             text, vision_errors = _read_lipicore_vision(source_path, DocumentType.unknown, active_settings)
             warnings.extend(vision_errors)
@@ -1256,6 +1269,15 @@ def extract_demo_from_upload(
                 providers.append("LipiCore vision")
         except Exception as exc:
             warnings.append(f"LipiCore vision unavailable: {exc}")
+
+    if not text and source_path and active_ocr_provider in {"paddleocr", "paddle", "paddle_gemma"}:
+        try:
+            text, provider_errors, provider_name = _read_configured_ocr_provider(source_path, DocumentType.unknown, active_settings)
+            warnings.extend(provider_errors)
+            if text:
+                providers.append(provider_name)
+        except Exception as exc:
+            warnings.append(f"Configured OCR provider unavailable: {exc}")
 
     if not text:
         try:
