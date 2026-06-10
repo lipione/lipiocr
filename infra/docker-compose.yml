@@ -14,6 +14,10 @@ services:
       LIPIOCR_STORAGE_BACKEND: ${LIPIOCR_STORAGE_BACKEND:-s3}
       LIPIOCR_OCR_PROVIDER: ${LIPIOCR_OCR_PROVIDER:-gemma_vision}
       LIPIOCR_PADDLE_LANG: ${LIPIOCR_PADDLE_LANG:-en}
+      LIPIOCR_PADDLE_DET_MODEL_DIR: ${LIPIOCR_PADDLE_DET_MODEL_DIR:-}
+      LIPIOCR_PADDLE_REC_MODEL_DIR: ${LIPIOCR_PADDLE_REC_MODEL_DIR:-}
+      LIPIOCR_PADDLE_CLS_MODEL_DIR: ${LIPIOCR_PADDLE_CLS_MODEL_DIR:-}
+      LIPIOCR_PADDLE_REC_CHAR_DICT_PATH: ${LIPIOCR_PADDLE_REC_CHAR_DICT_PATH:-}
       LIPIOCR_GEMMA_ENABLED: ${LIPIOCR_GEMMA_ENABLED:-true}
       LIPIOCR_GEMMA_API_BASE: ${LIPIOCR_GEMMA_API_BASE:-http://host.docker.internal:8003/v1}
       LIPIOCR_GEMMA_MODEL: ${LIPIOCR_GEMMA_MODEL:-gemma-4-26b-4bit}
@@ -36,6 +40,7 @@ services:
       - "${LIPIOCR_API_PORT:-8020}:8000"
     volumes:
       - ../storage/uploads:/app/storage/uploads
+      - ${LIPIOCR_PADDLE_MODEL_MOUNT:-/data/lipivision}:/models/lipivision:ro
     depends_on:
       - postgres
       - redis

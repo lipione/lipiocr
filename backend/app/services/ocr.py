@@ -474,7 +474,19 @@ class PaddleOcrProvider:
         except ImportError as exc:
             raise RuntimeError("Install backend optional dependency group: pip install -e '.[ocr]'") from exc
 
-        self._engine = PaddleOCR(use_angle_cls=True, lang=self.settings.paddle_lang)
+        options = {
+            "use_angle_cls": True,
+            "lang": self.settings.paddle_lang,
+        }
+        if self.settings.paddle_det_model_dir:
+            options["det_model_dir"] = self.settings.paddle_det_model_dir
+        if self.settings.paddle_rec_model_dir:
+            options["rec_model_dir"] = self.settings.paddle_rec_model_dir
+        if self.settings.paddle_cls_model_dir:
+            options["cls_model_dir"] = self.settings.paddle_cls_model_dir
+        if self.settings.paddle_rec_char_dict_path:
+            options["rec_char_dict_path"] = self.settings.paddle_rec_char_dict_path
+        self._engine = PaddleOCR(**options)
         return self._engine
 
     def read(self, file_path: Path, document_type: DocumentType) -> List[OcrObservation]:

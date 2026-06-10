@@ -26,6 +26,10 @@ class Settings(BaseModel):
     s3_region: str = os.getenv("AWS_REGION", "us-east-1")
     ocr_provider: str = os.getenv("LIPIOCR_OCR_PROVIDER", "mock")
     paddle_lang: str = os.getenv("LIPIOCR_PADDLE_LANG", "en")
+    paddle_det_model_dir: str = os.getenv("LIPIOCR_PADDLE_DET_MODEL_DIR", "")
+    paddle_rec_model_dir: str = os.getenv("LIPIOCR_PADDLE_REC_MODEL_DIR", "")
+    paddle_cls_model_dir: str = os.getenv("LIPIOCR_PADDLE_CLS_MODEL_DIR", "")
+    paddle_rec_char_dict_path: str = os.getenv("LIPIOCR_PADDLE_REC_CHAR_DICT_PATH", "")
     gemma_api_base: str = os.getenv("LIPIOCR_GEMMA_API_BASE", "http://127.0.0.1:8003/v1")
     gemma_model: str = os.getenv("LIPIOCR_GEMMA_MODEL", "gemma-4-26b-4bit")
     gemma_enabled: bool = os.getenv("LIPIOCR_GEMMA_ENABLED", "false").lower() in {

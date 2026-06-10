@@ -66,6 +66,13 @@ For a deployment where PaddleOCR performs page OCR and a Gemma/OpenAI-compatible
 LIPIOCR_INSTALL_OCR_EXTRAS=true
 LIPIOCR_OCR_PROVIDER=paddle_gemma
 LIPIOCR_PADDLE_LANG=en
+LIPIOCR_PADDLE_MODEL_MOUNT=/data/lipivision
+
+# Optional, after PaddleOCR trained models are exported to inference format:
+LIPIOCR_PADDLE_DET_MODEL_DIR=
+LIPIOCR_PADDLE_REC_MODEL_DIR=
+LIPIOCR_PADDLE_CLS_MODEL_DIR=
+LIPIOCR_PADDLE_REC_CHAR_DICT_PATH=/models/lipivision/paddle_rec/char_dict.txt
 
 LIPIOCR_GEMMA_ENABLED=true
 LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8002/v1
