@@ -56,6 +56,10 @@ services:
         NEXT_PUBLIC_API_PORT: ${LIPIOCR_API_PORT:-8020}
         NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
     container_name: lipiocr-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8020}
+      NEXT_PUBLIC_API_PORT: ${LIPIOCR_API_PORT:-8020}
+      NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
     ports:
       - "${LIPIOCR_FRONTEND_PORT:-3020}:3000"
     depends_on:
