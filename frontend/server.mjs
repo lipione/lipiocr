@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 
 const publicPort = Number(process.env.PORT || 3000);
 const nextPort = Number(process.env.NEXT_INTERNAL_PORT || 3001);
-const host = process.env.HOSTNAME || "0.0.0.0";
+const host = process.env.LIPIOCR_FRONTEND_HOST || "0.0.0.0";
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
 
 const next = spawn(
