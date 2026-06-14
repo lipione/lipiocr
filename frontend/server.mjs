@@ -5,6 +5,7 @@ const publicPort = Number(process.env.PORT || 3000);
 const nextPort = Number(process.env.NEXT_INTERNAL_PORT || 3001);
 const host = process.env.LIPIOCR_FRONTEND_HOST || "0.0.0.0";
 const basePath = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
+const internalApiUrl = new URL(process.env.LIPIOCR_INTERNAL_API_BASE || "http://api:8000");
 
 const next = spawn(
   "node",
@@ -30,12 +31,27 @@ function stripBasePath(url) {
 
 const server = http.createServer((request, response) => {
   const targetPath = stripBasePath(request.url || "/");
+  const isApiRequest = targetPath === "/api" || targetPath.startsWith("/api/");
+  const upstream = isApiRequest
+    ? {
+        host: internalApiUrl.hostname,
+        port: Number(internalApiUrl.port || 80),
+        path: `${internalApiUrl.pathname.replace(/\/$/, "")}${targetPath}`,
+        label: "API",
+      }
+    : {
+        host: "127.0.0.1",
+        port: nextPort,
+        path: targetPath,
+        label: "Frontend",
+      };
+
   const proxyRequest = http.request(
     {
-      host: "127.0.0.1",
-      port: nextPort,
+      host: upstream.host,
+      port: upstream.port,
       method: request.method,
-      path: targetPath,
+      path: upstream.path,
       headers: request.headers,
     },
     (proxyResponse) => {
@@ -46,7 +62,7 @@ const server = http.createServer((request, response) => {
 
   proxyRequest.on("error", (error) => {
     response.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
-    response.end(`Frontend proxy failed: ${error.message}`);
+    response.end(`${upstream.label} proxy failed: ${error.message}`);
   });
 
   request.pipe(proxyRequest);
@@ -54,6 +70,7 @@ const server = http.createServer((request, response) => {
 
 server.listen(publicPort, host, () => {
   console.log(`LipiOCR frontend proxy listening on ${host}:${publicPort}`);
+  console.log(`LipiOCR API proxy target ${internalApiUrl.origin}${internalApiUrl.pathname}`);
 });
 
 function shutdown() {
