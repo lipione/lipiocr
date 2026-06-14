@@ -525,11 +525,15 @@ class GemmaVisionOcrProvider:
         mime_type = mimetypes.guess_type(file_path.name)[0] or "image/jpeg"
         image_b64 = base64.b64encode(file_path.read_bytes()).decode("ascii")
         prompt = (
-            "You are LipiOCR OCR/ICR for Nepal financial institution documents. "
-            "Transcribe every visible line from the image, including printed Nepali Devanagari, English, numbers, "
-            "and handwritten Nepali or English. Preserve original script and numerals. "
+            "You are LipiCore Vision 12B OCR/ICR for Nepal financial institution documents. "
+            "First act as a strict OCR engine: transcribe every visible word, label, filled value, table cell, "
+            "stamp text, seal text, and handwritten mark from the image. Include printed Nepali Devanagari, English, "
+            "numbers, and handwritten Nepali or English. Preserve original script and numerals. "
             "Do not paraphrase visible text, rewrite it as sentences, or infer values that are not visible. "
             "Do not skip uncertain handwriting; return it with lower confidence. "
+            "For table or form layouts, preserve row order from top-to-bottom and left-to-right. "
+            "When a printed label and handwritten value are on the same line, return both in lines and also return "
+            "the handwritten value as a structured field candidate when possible. "
             "Mark handwritten lines with script='handwriting' and printed lines with script='printed'. "
             "Also extract structured field candidates for financial onboarding and KYC forms, and asset regions for "
             "photos, fingerprints/thumbprints, signatures, stamps/seals, chips, QR codes, and barcodes. "

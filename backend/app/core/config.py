@@ -47,6 +47,12 @@ class Settings(BaseModel):
         "yes",
         "on",
     }
+    legacy_ocr_fallback_enabled: bool = os.getenv("LIPIOCR_LEGACY_OCR_FALLBACK_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     api_auth_enabled: bool = os.getenv("LIPIOCR_API_AUTH_ENABLED", "false").lower() in {
         "1",
         "true",

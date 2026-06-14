@@ -116,13 +116,13 @@ def test_get_ocr_provider_supports_remote_gemma_vision():
         settings=Settings(
             gemma_enabled=True,
             gemma_api_base="http://127.0.0.1:8003/v1",
-            gemma_model="gemma-4-26b-4bit",
+            gemma_model="lipione-gemma4-12b",
         ),
     )
 
     assert isinstance(provider, GemmaVisionOcrProvider)
     assert provider.name == "gemma_vision"
-    assert provider.settings.gemma_model == "gemma-4-26b-4bit"
+    assert provider.settings.gemma_model == "lipione-gemma4-12b"
 
 
 def test_get_ocr_provider_supports_paddle_gemma_alias_with_configured_language():
@@ -185,6 +185,8 @@ def test_gemma_vision_provider_builds_multimodal_request(tmp_path):
     assert "asset_regions" in http_client.payload["messages"][0]["content"][0]["text"]
     assert "bbox coordinates must use [left, top, right, bottom]" in http_client.payload["messages"][0]["content"][0]["text"]
     assert "Do not paraphrase visible text" in http_client.payload["messages"][0]["content"][0]["text"]
+    assert "LipiCore Vision 12B OCR/ICR" in http_client.payload["messages"][0]["content"][0]["text"]
+    assert "strict OCR engine" in http_client.payload["messages"][0]["content"][0]["text"]
     assert "applicant_name" in http_client.payload["messages"][0]["content"][0]["text"]
     assert http_client.payload["max_tokens"] == 1200
     assert observations[0]["text"] == "हस्तलिखित रकम: ५०००"

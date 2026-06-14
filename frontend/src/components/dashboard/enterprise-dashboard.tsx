@@ -123,7 +123,7 @@ function statusTone(status?: string) {
 
 function providerLabel(provider: { key: string; label: string }) {
   if (provider.key === "gemma_vision") {
-    return "LipiCore handwriting and print";
+    return "LipiCore Vision 12B";
   }
   if (provider.key === "mock") {
     return "LipiCore local profile";
@@ -133,12 +133,12 @@ function providerLabel(provider: { key: string; label: string }) {
 
 function providerBestFor(provider: { key: string; best_for: string }) {
   if (provider.key === "gemma_vision") {
-    return "Nepali and English source text with reviewer confirmation";
+    return "Full-page OCR, handwriting, field labeling, and visual asset regions";
   }
   if (provider.key === "mock") {
     return "Local workflow checks before institution data is connected";
   }
-  return "Document text recognition with preserved page evidence";
+  return provider.best_for || "Document text recognition with preserved page evidence";
 }
 
 function laneTone(laneKey: string): MetricTone {

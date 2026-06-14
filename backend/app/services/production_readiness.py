@@ -30,21 +30,21 @@ def build_ocr_pipeline_profile(settings) -> dict[str, object]:
         },
         {
             "key": "tesseract",
-            "label": "LipiCore Nepali OCR",
-            "status": "configured" if active_provider == "tesseract" else "optional",
-            "best_for": "Devanagari fallback and low-resource deployments",
+            "label": "Legacy Nepali OCR",
+            "status": "configured" if active_provider == "tesseract" else "disabled",
+            "best_for": "Disabled in the 12B vision-first deployment; available only as an explicit fallback",
         },
         {
             "key": "paddleocr",
-            "label": "LipiCore Printed OCR",
-            "status": "configured" if active_provider == "paddleocr" else "optional",
-            "best_for": "Modern printed document OCR and layout-aware extraction",
+            "label": "Legacy Printed OCR",
+            "status": "configured" if active_provider in {"paddleocr", "paddle_gemma"} else "disabled",
+            "best_for": "Disabled in the 12B vision-first deployment; useful only for benchmark comparison",
         },
         {
             "key": "gemma_vision",
-            "label": "LipiCore Vision",
+            "label": "LipiCore Vision 12B",
             "status": "configured" if active_provider == "gemma_vision" else "available",
-            "best_for": "Remote full-page Nepali/English OCR plus handwritten field transcription",
+            "best_for": "Full-page Nepali/English OCR, handwriting transcription, field labeling, and visual asset regions",
         },
     ]
     stages = [
@@ -66,11 +66,11 @@ def build_ocr_pipeline_profile(settings) -> dict[str, object]:
             }
             for key, label in stages
         ],
-        "outputs": ["ocr_pages", "text_blocks", "bounding_boxes", "confidence_scores"],
+        "outputs": ["ocr_pages", "text_blocks", "field_candidates", "asset_regions", "bounding_boxes", "confidence_scores"],
         "production_requirements": [
-            "Install local fallback OCR in the deployment image",
-            "Run representative Nepali financial documents through accuracy evaluation",
+            "Run representative Nepali financial documents through 12B vision accuracy evaluation",
             "Calibrate confidence thresholds from reviewer corrections",
+            "Keep legacy OCR disabled unless an institution explicitly approves fallback comparison",
         ],
     }
 

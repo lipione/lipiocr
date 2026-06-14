@@ -1279,7 +1279,7 @@ def extract_demo_from_upload(
         except Exception as exc:
             warnings.append(f"Configured OCR provider unavailable: {exc}")
 
-    if not text:
+    if not text and active_settings.legacy_ocr_fallback_enabled:
         try:
             text, ocr_errors = _ocr_upload_with_tesseract(content, filename, content_type)
             warnings.extend(ocr_errors)
@@ -1287,6 +1287,8 @@ def extract_demo_from_upload(
                 providers.append("Tesseract eng+nep")
         except Exception as exc:
             warnings.append(f"Tesseract OCR unavailable: {exc}")
+    elif not text:
+        warnings.append("Legacy OCR fallback disabled; LipiCore Vision did not return readable text.")
 
     result = extract_demo_from_text(text, filename=filename)
     result["warnings"] = warnings + result["warnings"]

@@ -32,11 +32,18 @@ def test_ocr_pipeline_profile_describes_real_provider_path():
     provider_keys = {provider["key"] for provider in body["providers"]}
     stage_keys = {stage["key"] for stage in body["preprocessing_stages"]}
 
-    assert {"mock", "tesseract", "paddleocr"}.issubset(provider_keys)
+    assert {"mock", "tesseract", "paddleocr", "gemma_vision"}.issubset(provider_keys)
     assert {"deskew", "denoise", "rotation_detection", "language_routing", "confidence_calibration"}.issubset(
         stage_keys
     )
-    assert body["outputs"] == ["ocr_pages", "text_blocks", "bounding_boxes", "confidence_scores"]
+    assert body["outputs"] == [
+        "ocr_pages",
+        "text_blocks",
+        "field_candidates",
+        "asset_regions",
+        "bounding_boxes",
+        "confidence_scores",
+    ]
 
 
 def test_operations_dashboard_tracks_lanes_and_bottlenecks():

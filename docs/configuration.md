@@ -27,14 +27,15 @@ Configuration is environment-variable driven. Do not commit real `.env` files.
 | `AWS_ACCESS_KEY_ID` | empty | Store in vault or orchestrator secret. |
 | `AWS_SECRET_ACCESS_KEY` | empty | Store in vault or orchestrator secret. |
 | `AWS_REGION` | `us-east-1` | Set to institution/cloud region. |
-| `LIPIOCR_OCR_PROVIDER` | `mock` | Use `gemma_vision`, `paddleocr`, or `tesseract` when configured. |
+| `LIPIOCR_OCR_PROVIDER` | `mock` | Use `gemma_vision` for the 12B vision-first pipeline. `paddleocr` and `tesseract` are legacy comparison paths. |
 | `LIPIOCR_GEMMA_ENABLED` | `false` | Enable only when endpoint is reachable. |
 | `LIPIOCR_GEMMA_API_BASE` | `http://127.0.0.1:8003/v1` | OpenAI-compatible vLLM endpoint. |
-| `LIPIOCR_GEMMA_MODEL` | `gemma-4-26b-4bit` | Institution-approved deployed model name. |
+| `LIPIOCR_GEMMA_MODEL` | `gemma-4-26b-4bit` | Institution-approved deployed model name. Use `lipione-gemma4-12b` for the current remote 12B vision endpoint. |
 | `LIPIOCR_GEMMA_TIMEOUT_SECONDS` | `45` | Increase for full-page vision extraction. |
 | `LIPIOCR_GEMMA_MAX_TOKENS` | `1200` | Increase for large forms and packets. |
 | `LIPIOCR_GEMMA_RETRIES` | `2` | Keep bounded to avoid blocking queues. |
 | `LIPIOCR_GEMMA_REQUIRE_JSON` | `true` | Keep true for structured extraction. |
+| `LIPIOCR_LEGACY_OCR_FALLBACK_ENABLED` | `true` | Set `false` for 12B-only OCR/ICR demos so Paddle/Tesseract do not silently take over. |
 | `LIPIOCR_API_AUTH_ENABLED` | `false` | Must be `true` in production. |
 | `LIPIOCR_API_KEYS` | empty | Format `key:role,key2:role2`; use vault-managed keys. |
 | `LIPIOCR_SESSION_SECRET` | derived fallback | Must be unique random secret in production. |

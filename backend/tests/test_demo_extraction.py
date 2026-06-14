@@ -1,4 +1,5 @@
-from app.services.demo_extraction import extract_demo_from_text
+from app.core.config import Settings
+from app.services.demo_extraction import extract_demo_from_text, extract_demo_from_upload
 
 
 def _field_map(result):
@@ -126,3 +127,20 @@ def test_demo_extraction_structures_old_nepali_citizenship_ocr_lines():
     assert fields["mother_name_np"]["normalized_value"] == "XXX"
     assert fields["spouse_name_np"]["normalized_value"] == "XXX"
     assert fields["citizenship_type"]["normalized_value"] == "वंशज"
+
+
+def test_demo_upload_respects_disabled_legacy_ocr_fallback():
+    result = extract_demo_from_upload(
+        content=b"not an image",
+        filename="scan.bin",
+        content_type="application/octet-stream",
+        prefer_lipicore=True,
+        settings=Settings(
+            ocr_provider="gemma_vision",
+            gemma_enabled=True,
+            legacy_ocr_fallback_enabled=False,
+        ),
+    )
+
+    assert "Tesseract eng+nep" not in result["providers"]
+    assert any("Legacy OCR fallback disabled" in warning for warning in result["warnings"])

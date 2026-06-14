@@ -58,31 +58,31 @@ Before production:
 - Keep MinIO and Postgres private.
 - Put TLS and access control in front of the stack.
 
-### PaddleOCR + Gemma Reasoning Deployment
+### LipiCore Vision 12B Deployment
 
-For a deployment where PaddleOCR performs page OCR and a Gemma/OpenAI-compatible endpoint performs LipiCore text reasoning, configure:
+For the current enterprise demo and on-prem pilot path, LipiCore Vision 12B performs full-page OCR/ICR directly from images. PaddleOCR and Tesseract remain available in the codebase for benchmark comparison, but they should stay disabled unless an institution explicitly asks for a fallback comparison.
 
 ```bash
-LIPIOCR_INSTALL_OCR_EXTRAS=true
-LIPIOCR_OCR_PROVIDER=paddle_gemma
-LIPIOCR_PADDLE_LANG=en
-LIPIOCR_PADDLE_MODEL_MOUNT=/data/lipivision
-
-# Optional, after PaddleOCR trained models are exported to inference format:
-LIPIOCR_PADDLE_DET_MODEL_DIR=
-LIPIOCR_PADDLE_REC_MODEL_DIR=
-LIPIOCR_PADDLE_CLS_MODEL_DIR=
-LIPIOCR_PADDLE_REC_CHAR_DICT_PATH=/models/lipivision/paddle_rec/char_dict.txt
-
+LIPIOCR_INSTALL_OCR_EXTRAS=false
+LIPIOCR_OCR_PROVIDER=gemma_vision
+LIPIOCR_LEGACY_OCR_FALLBACK_ENABLED=false
 LIPIOCR_GEMMA_ENABLED=true
-LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8002/v1
-LIPIOCR_GEMMA_MODEL=gemma-4
+LIPIOCR_GEMMA_API_BASE=http://host.docker.internal:8003/v1
+LIPIOCR_GEMMA_MODEL=lipione-gemma4-12b
 LIPIOCR_GEMMA_REQUIRE_JSON=true
+LIPIOCR_GEMMA_TIMEOUT_SECONDS=90
+LIPIOCR_GEMMA_MAX_TOKENS=4000
 ```
 
-`paddle_gemma` selects the PaddleOCR provider for OCR. Gemma remains enabled separately as LipiCore reasoning over OCR evidence. Do not point `LIPIOCR_OCR_PROVIDER=gemma_vision` at a text-only Gemma model; that mode expects an image-capable chat endpoint.
+`gemma_vision` sends the uploaded page image to the OpenAI-compatible `/chat/completions` endpoint with an image input. The served model must accept `image_url` content. Verify this first:
 
-If a fine-tuned Gemma LoRA is available, serve it behind the OpenAI-compatible endpoint first, then update `LIPIOCR_GEMMA_MODEL` to the served model name after `/v1/models` confirms it is live.
+```bash
+curl http://127.0.0.1:8003/v1/models
+```
+
+Expected remote models include `gemma4-12b-base` and `lipione-gemma4-12b`. Use `lipione-gemma4-12b` for the OCR/ICR demo path.
+
+Do not set `LIPIOCR_OCR_PROVIDER=paddle_gemma` for this deployment. That mode routes image reading through PaddleOCR first and uses LipiCore only after OCR evidence exists.
 
 ## Persistent Data
 

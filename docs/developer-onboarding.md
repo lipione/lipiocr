@@ -195,7 +195,8 @@ Gemma vision mode:
 LIPIOCR_OCR_PROVIDER=gemma_vision \
 LIPIOCR_GEMMA_ENABLED=true \
 LIPIOCR_GEMMA_API_BASE=http://127.0.0.1:8003/v1 \
-LIPIOCR_GEMMA_MODEL=gemma-4-26b-4bit \
+LIPIOCR_GEMMA_MODEL=lipione-gemma4-12b \
+LIPIOCR_LEGACY_OCR_FALLBACK_ENABLED=false \
 make backend-dev
 ```
 
