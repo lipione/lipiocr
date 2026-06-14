@@ -341,6 +341,53 @@ def test_gemma_vision_provider_tiles_large_page_when_full_page_is_too_sparse(tmp
     assert observations[2]["bbox"] == [30, 734, 520, 762]
 
 
+def test_gemma_vision_provider_tiles_large_page_when_full_page_is_repetitive(tmp_path):
+    class FakeResponse:
+        def __init__(self, content: str):
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": self.content}}]}
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, url, json):
+            self.calls += 1
+            if self.calls == 1:
+                repeated = ",".join(
+                    ['{"text":"नेपाल","confidence":0.48,"bbox":[20,20,120,50]}'] * 16
+                )
+                return FakeResponse(f'{{"lines":[{repeated}]}}')
+            return FakeResponse(
+                '{"lines":[{"text":"Applicant Name: Rudra Man Isuwa","confidence":0.85,"bbox":[30,30,520,58]}],'
+                '"fields":[{"key":"applicant_name","value":"Rudra Man Isuwa","confidence":0.82,"bbox":[250,30,520,58]}]}'
+            )
+
+    image = tmp_path / "asba-watermark.jpg"
+    Image.new("RGB", (1158, 1600), "white").save(image)
+    http_client = FakeClient()
+    provider = GemmaVisionOcrProvider(
+        Settings(
+            gemma_api_base="http://gemma.local/v1",
+            gemma_model="lipione-gemma4-12b",
+            gemma_vision_tile_count=2,
+            gemma_vision_tile_min_lines=8,
+        ),
+        http_client=http_client,
+    )
+
+    observations = provider.read(image, DocumentType.asba_application)
+
+    assert http_client.calls == 3
+    assert observations[0]["text"] == "Applicant Name: Rudra Man Isuwa"
+    assert observations[1]["field_key"] == "applicant_name"
+
+
 def test_observations_from_tesseract_data_groups_words_into_line_boxes():
     data = {
         "page_num": [1, 1, 1, 1],

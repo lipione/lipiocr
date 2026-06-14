@@ -538,7 +538,7 @@ class GemmaVisionOcrProvider:
             tiled_observations = self._read_tiled(file_path, document_type)
             if tiled_observations and (
                 full_page_error
-                or self._text_line_count(tiled_observations) > self._text_line_count(observations)
+                or self._ocr_quality_score(tiled_observations) > self._ocr_quality_score(observations)
             ):
                 observations = tiled_observations
 
@@ -637,7 +637,9 @@ class GemmaVisionOcrProvider:
             return False
         if full_page_error is not None:
             return True
-        if self._text_line_count(observations) >= max(1, self.settings.gemma_vision_tile_min_lines):
+        if self._text_line_count(observations) >= max(1, self.settings.gemma_vision_tile_min_lines) and self._unique_text_line_count(
+            observations
+        ) >= max(4, self.settings.gemma_vision_tile_min_lines // 2):
             return False
         try:
             from PIL import Image
@@ -712,6 +714,32 @@ class GemmaVisionOcrProvider:
                 and observation.get("block_type") not in {"photo", "fingerprint", "signature", "stamp", "chip", "visual_asset"}
             ]
         )
+
+    def _unique_text_line_count(self, observations: List[OcrObservation]) -> int:
+        normalized_lines = {
+            re.sub(r"\s+", " ", str(observation.get("text") or "").strip()).lower()
+            for observation in observations
+            if observation.get("field_key") == "raw_text"
+            and str(observation.get("text") or "").strip()
+            and observation.get("block_type") not in {"photo", "fingerprint", "signature", "stamp", "chip", "visual_asset"}
+        }
+        return len(normalized_lines)
+
+    def _ocr_quality_score(self, observations: List[OcrObservation]) -> float:
+        text_chars = sum(
+            len(re.sub(r"\s+", "", str(observation.get("text") or "")))
+            for observation in observations
+            if str(observation.get("text") or "").strip()
+        )
+        structured_count = len(
+            [
+                observation
+                for observation in observations
+                if observation.get("field_key") != "raw_text"
+                or observation.get("block_type") in {"photo", "fingerprint", "signature", "stamp", "chip", "visual_asset"}
+            ]
+        )
+        return (self._unique_text_line_count(observations) * 4.0) + (structured_count * 3.0) + (text_chars / 50.0)
 
 
 def get_ocr_provider(name: str = "mock", *, settings: Optional[Settings] = None) -> OcrProvider:
