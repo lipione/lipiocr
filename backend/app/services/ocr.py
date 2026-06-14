@@ -594,8 +594,10 @@ class GemmaVisionOcrProvider:
         document_type: DocumentType,
         *,
         tile_context: str = "",
+        max_tokens: Optional[int] = None,
     ) -> List[OcrObservation]:
         image_b64 = base64.b64encode(image_bytes).decode("ascii")
+        token_limit = max_tokens if max_tokens is not None else self.settings.gemma_max_tokens
         payload = {
             "model": self.settings.gemma_model,
             "messages": [
@@ -611,7 +613,7 @@ class GemmaVisionOcrProvider:
                 }
             ],
             "temperature": 0,
-            "max_tokens": max(500, min(self.settings.gemma_max_tokens, 3000)),
+            "max_tokens": max(500, min(token_limit, 3000)),
         }
         if self.settings.gemma_require_json:
             payload["response_format"] = {"type": "json_object"}
@@ -680,6 +682,7 @@ class GemmaVisionOcrProvider:
                     "image/jpeg",
                     document_type,
                     tile_context=f"This is vertical page region {index + 1} of {tile_count}, y={top}..{bottom}.",
+                    max_tokens=min(self.settings.gemma_max_tokens, 1400),
                 )
             except (httpx.HTTPError, RuntimeError):
                 continue
