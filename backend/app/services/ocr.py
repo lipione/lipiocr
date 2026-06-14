@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import mimetypes
 import re
@@ -522,8 +523,38 @@ class GemmaVisionOcrProvider:
         self.http_client = http_client or httpx.Client(timeout=settings.gemma_timeout_seconds)
 
     def read(self, file_path: Path, document_type: DocumentType) -> List[OcrObservation]:
-        mime_type = mimetypes.guess_type(file_path.name)[0] or "image/jpeg"
-        image_b64 = base64.b64encode(file_path.read_bytes()).decode("ascii")
+        full_page_error: Optional[Exception] = None
+        observations: List[OcrObservation] = []
+        try:
+            observations = self._read_image_bytes(
+                file_path.read_bytes(),
+                mimetypes.guess_type(file_path.name)[0] or "image/jpeg",
+                document_type,
+            )
+        except (httpx.TimeoutException, RuntimeError) as exc:
+            full_page_error = exc
+
+        if self._should_run_tiled_pass(file_path, observations, full_page_error):
+            tiled_observations = self._read_tiled(file_path, document_type)
+            if tiled_observations and (
+                full_page_error
+                or self._text_line_count(tiled_observations) > self._text_line_count(observations)
+            ):
+                observations = tiled_observations
+
+        if full_page_error and not observations:
+            raise full_page_error
+        if not observations:
+            raise RuntimeError("Gemma vision OCR returned no text lines")
+        return normalize_gemma_observation_bboxes(observations)
+
+    def _prompt(self, document_type: DocumentType, *, tile_context: str = "") -> str:
+        tile_instruction = ""
+        if tile_context:
+            tile_instruction = (
+                f" {tile_context} Return bbox coordinates relative to this tile image, not the full page. "
+                "Do not mention that this is a tile in extracted text."
+            )
         prompt = (
             "You are LipiCore Vision 12B OCR/ICR for Nepal financial institution documents. "
             "First act as a strict OCR engine: transcribe every visible word, label, filled value, table cell, "
@@ -547,19 +578,31 @@ class GemmaVisionOcrProvider:
             "issuing officer, photo, holder signature, and left/right thumbprints. "
             "For C-ASBA/IPO forms, read the filled handwriting inside boxes and rows, not only the printed labels. "
             "All bbox coordinates must use [left, top, right, bottom] pixel order. "
+            f"{tile_instruction} "
             "Return JSON only with schema: "
             "{document_type,lines:[{text,confidence,script,language,bbox}],"
             "fields:[{key,value,confidence,script,language,bbox}],"
             "asset_regions:[{type,label,confidence,bbox}]}. "
             f"Expected document type: {document_type.value}."
         )
+        return prompt
+
+    def _read_image_bytes(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        document_type: DocumentType,
+        *,
+        tile_context: str = "",
+    ) -> List[OcrObservation]:
+        image_b64 = base64.b64encode(image_bytes).decode("ascii")
         payload = {
             "model": self.settings.gemma_model,
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": self._prompt(document_type, tile_context=tile_context)},
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:{mime_type};base64,{image_b64}"},
@@ -583,6 +626,92 @@ class GemmaVisionOcrProvider:
         if not observations:
             raise RuntimeError("Gemma vision OCR returned no text lines")
         return observations
+
+    def _should_run_tiled_pass(
+        self,
+        file_path: Path,
+        observations: List[OcrObservation],
+        full_page_error: Optional[Exception],
+    ) -> bool:
+        if not self.settings.gemma_vision_tiling_enabled:
+            return False
+        if full_page_error is not None:
+            return True
+        if self._text_line_count(observations) >= max(1, self.settings.gemma_vision_tile_min_lines):
+            return False
+        try:
+            from PIL import Image
+
+            with Image.open(file_path) as image:
+                width, height = image.size
+        except Exception:
+            return False
+        return max(width, height) >= 1200
+
+    def _read_tiled(self, file_path: Path, document_type: DocumentType) -> List[OcrObservation]:
+        try:
+            from PIL import Image, ImageOps
+        except ImportError as exc:
+            raise RuntimeError("Install Pillow to use LipiCore Vision tiled OCR") from exc
+
+        with Image.open(file_path) as raw_image:
+            image = ImageOps.exif_transpose(raw_image).convert("RGB")
+
+        width, height = image.size
+        tile_count = max(2, min(self.settings.gemma_vision_tile_count, 8))
+        overlap = max(0, min(self.settings.gemma_vision_tile_overlap_px, max(0, height // 4)))
+        base_step = max(1, height // tile_count)
+        merged: List[OcrObservation] = []
+        seen: set[tuple[str, str, str]] = set()
+
+        for index in range(tile_count):
+            top = max(0, index * base_step - (overlap if index else 0))
+            bottom = height if index == tile_count - 1 else min(height, (index + 1) * base_step + overlap)
+            if bottom <= top:
+                continue
+            tile = image.crop((0, top, width, bottom))
+            buffer = io.BytesIO()
+            tile.save(buffer, format="JPEG", quality=88, optimize=True)
+            try:
+                tile_observations = self._read_image_bytes(
+                    buffer.getvalue(),
+                    "image/jpeg",
+                    document_type,
+                    tile_context=f"This is vertical page region {index + 1} of {tile_count}, y={top}..{bottom}.",
+                )
+            except (httpx.HTTPError, RuntimeError):
+                continue
+            for observation in tile_observations:
+                adjusted = self._offset_observation_bbox(observation, y_offset=top)
+                key = (
+                    str(adjusted.get("field_key") or ""),
+                    str(adjusted.get("text") or "").strip(),
+                    str(adjusted.get("bbox") or ""),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(adjusted)
+
+        return normalize_gemma_observation_bboxes(merged)
+
+    def _offset_observation_bbox(self, observation: OcrObservation, *, y_offset: int) -> OcrObservation:
+        adjusted = OcrObservation(observation)
+        bbox = _valid_bbox(adjusted.get("bbox"))
+        if bbox:
+            adjusted["bbox"] = [bbox[0], bbox[1] + y_offset, bbox[2], bbox[3] + y_offset]
+        return adjusted
+
+    def _text_line_count(self, observations: List[OcrObservation]) -> int:
+        return len(
+            [
+                observation
+                for observation in observations
+                if observation.get("field_key") == "raw_text"
+                and str(observation.get("text") or "").strip()
+                and observation.get("block_type") not in {"photo", "fingerprint", "signature", "stamp", "chip", "visual_asset"}
+            ]
+        )
 
 
 def get_ocr_provider(name: str = "mock", *, settings: Optional[Settings] = None) -> OcrProvider:

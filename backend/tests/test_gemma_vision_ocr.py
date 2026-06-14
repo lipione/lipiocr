@@ -1,3 +1,6 @@
+import httpx
+from PIL import Image
+
 from app.core.config import Settings
 from app.models import DocumentType
 from app.services.ocr import (
@@ -234,6 +237,108 @@ def test_gemma_vision_provider_normalizes_transposed_page_coordinates(tmp_path):
     assert observations[0]["bbox"] == [50, 360, 130, 370]
     assert observations[1]["bbox"] == [150, 490, 300, 505]
     assert observations[2]["bbox"] == [150, 490, 300, 505]
+
+
+def test_gemma_vision_provider_tiles_large_page_after_timeout(tmp_path):
+    class FakeResponse:
+        def __init__(self, content: str):
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": self.content}}]}
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def post(self, url, json):
+            self.calls.append(json)
+            if len(self.calls) == 1:
+                raise httpx.ReadTimeout("timed out")
+            tile_number = len(self.calls) - 1
+            top = 10
+            return FakeResponse(
+                '{"lines":[{"text":"Tile %s text","confidence":0.81,"bbox":[20,%s,320,%s]}],'
+                '"fields":[{"key":"full_name_np","value":"राजेश घले","confidence":0.82,"bbox":[40,%s,360,%s]}]}'
+                % (tile_number, top, top + 24, top + 34, top + 58)
+            )
+
+    image = tmp_path / "citizenship.jpg"
+    Image.new("RGB", (900, 1800), "white").save(image)
+    http_client = FakeClient()
+    provider = GemmaVisionOcrProvider(
+        Settings(
+            gemma_api_base="http://gemma.local/v1",
+            gemma_model="lipione-gemma4-12b",
+            gemma_vision_tile_count=3,
+            gemma_vision_tile_overlap_px=50,
+        ),
+        http_client=http_client,
+    )
+
+    observations = provider.read(image, DocumentType.citizenship)
+
+    assert len(http_client.calls) == 4
+    assert [observation["text"] for observation in observations if observation["field_key"] == "raw_text"] == [
+        "Tile 1 text",
+        "Tile 2 text",
+        "Tile 3 text",
+    ]
+    assert observations[0]["bbox"] == [20, 10, 320, 34]
+    assert observations[2]["bbox"] == [20, 560, 320, 584]
+    assert observations[4]["bbox"] == [20, 1160, 320, 1184]
+    assert observations[1]["field_key"] == "full_name_np"
+    assert "vertical page region 1 of 3" in http_client.calls[1]["messages"][0]["content"][0]["text"]
+
+
+def test_gemma_vision_provider_tiles_large_page_when_full_page_is_too_sparse(tmp_path):
+    class FakeResponse:
+        def __init__(self, content: str):
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": self.content}}]}
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, url, json):
+            self.calls += 1
+            if self.calls == 1:
+                return FakeResponse('{"lines":[{"text":"NMB BANK LIMITED","confidence":0.80,"bbox":[20,20,260,50]}]}')
+            return FakeResponse(
+                '{"lines":[{"text":"Applicant Name: Rudra Man Isuwa","confidence":0.85,"bbox":[30,30,520,58]},'
+                '{"text":"Mobile: 9808525464","confidence":0.87,"bbox":[30,80,330,108]}]}'
+            )
+
+    image = tmp_path / "asba.jpg"
+    Image.new("RGB", (1158, 1600), "white").save(image)
+    provider = GemmaVisionOcrProvider(
+        Settings(
+            gemma_api_base="http://gemma.local/v1",
+            gemma_model="lipione-gemma4-12b",
+            gemma_vision_tile_count=2,
+            gemma_vision_tile_min_lines=4,
+        ),
+        http_client=FakeClient(),
+    )
+
+    observations = provider.read(image, DocumentType.asba_application)
+
+    assert [observation["text"] for observation in observations] == [
+        "Applicant Name: Rudra Man Isuwa",
+        "Mobile: 9808525464",
+        "Applicant Name: Rudra Man Isuwa",
+        "Mobile: 9808525464",
+    ]
+    assert observations[2]["bbox"] == [30, 734, 520, 762]
 
 
 def test_observations_from_tesseract_data_groups_words_into_line_boxes():

@@ -72,6 +72,10 @@ LIPIOCR_GEMMA_MODEL=lipione-gemma4-12b
 LIPIOCR_GEMMA_REQUIRE_JSON=true
 LIPIOCR_GEMMA_TIMEOUT_SECONDS=90
 LIPIOCR_GEMMA_MAX_TOKENS=4000
+LIPIOCR_GEMMA_VISION_TILING_ENABLED=true
+LIPIOCR_GEMMA_VISION_TILE_COUNT=4
+LIPIOCR_GEMMA_VISION_TILE_OVERLAP_PX=96
+LIPIOCR_GEMMA_VISION_TILE_MIN_LINES=8
 ```
 
 `gemma_vision` sends the uploaded page image to the OpenAI-compatible `/chat/completions` endpoint with an image input. The served model must accept `image_url` content. Verify this first:
@@ -83,6 +87,8 @@ curl http://127.0.0.1:8003/v1/models
 Expected remote models include `gemma4-12b-base` and `lipione-gemma4-12b`. Use `lipione-gemma4-12b` for the OCR/ICR demo path.
 
 Do not set `LIPIOCR_OCR_PROVIDER=paddle_gemma` for this deployment. That mode routes image reading through PaddleOCR first and uses LipiCore only after OCR evidence exists.
+
+For dense Nepali forms, leave 12B vision tiling enabled. The API first asks LipiCore Vision to read the whole page. If that request times out, or if a large page returns only a few OCR lines, the provider rereads the page as overlapping vertical regions and merges the evidence. This keeps the demo 12B-only while avoiding the common failure where a full-page form returns only the header.
 
 ## Persistent Data
 

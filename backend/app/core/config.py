@@ -41,6 +41,15 @@ class Settings(BaseModel):
     gemma_timeout_seconds: float = float(os.getenv("LIPIOCR_GEMMA_TIMEOUT_SECONDS", "45"))
     gemma_max_tokens: int = int(os.getenv("LIPIOCR_GEMMA_MAX_TOKENS", "1200"))
     gemma_retries: int = int(os.getenv("LIPIOCR_GEMMA_RETRIES", "2"))
+    gemma_vision_tiling_enabled: bool = os.getenv("LIPIOCR_GEMMA_VISION_TILING_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    gemma_vision_tile_count: int = int(os.getenv("LIPIOCR_GEMMA_VISION_TILE_COUNT", "4"))
+    gemma_vision_tile_overlap_px: int = int(os.getenv("LIPIOCR_GEMMA_VISION_TILE_OVERLAP_PX", "96"))
+    gemma_vision_tile_min_lines: int = int(os.getenv("LIPIOCR_GEMMA_VISION_TILE_MIN_LINES", "8"))
     gemma_require_json: bool = os.getenv("LIPIOCR_GEMMA_REQUIRE_JSON", "true").lower() in {
         "1",
         "true",

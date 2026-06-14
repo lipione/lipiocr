@@ -34,6 +34,10 @@ Configuration is environment-variable driven. Do not commit real `.env` files.
 | `LIPIOCR_GEMMA_TIMEOUT_SECONDS` | `45` | Increase for full-page vision extraction. |
 | `LIPIOCR_GEMMA_MAX_TOKENS` | `1200` | Increase for large forms and packets. |
 | `LIPIOCR_GEMMA_RETRIES` | `2` | Keep bounded to avoid blocking queues. |
+| `LIPIOCR_GEMMA_VISION_TILING_ENABLED` | `true` | Keep enabled for large Nepali forms. If the full-page 12B read times out or returns too few lines, LipiOCR retries as page regions through the same LipiCore Vision endpoint. |
+| `LIPIOCR_GEMMA_VISION_TILE_COUNT` | `4` | Number of vertical page regions used for tiled 12B OCR. Use 3-5 for most scanned forms. |
+| `LIPIOCR_GEMMA_VISION_TILE_OVERLAP_PX` | `96` | Vertical overlap between regions so fields near crop boundaries are not missed. |
+| `LIPIOCR_GEMMA_VISION_TILE_MIN_LINES` | `8` | Minimum full-page OCR text lines before skipping the tiled enhancement pass on large images. |
 | `LIPIOCR_GEMMA_REQUIRE_JSON` | `true` | Keep true for structured extraction. |
 | `LIPIOCR_LEGACY_OCR_FALLBACK_ENABLED` | `true` | Set `false` for 12B-only OCR/ICR demos so Paddle/Tesseract do not silently take over. |
 | `LIPIOCR_API_AUTH_ENABLED` | `false` | Must be `true` in production. |
